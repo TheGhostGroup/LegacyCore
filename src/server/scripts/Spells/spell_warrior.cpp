@@ -56,6 +56,7 @@ enum WarriorSpells
     SPELL_WARRIOR_LAST_STAND_TRIGGERED              = 12976,
     SPELL_WARRIOR_MORTAL_STRIKE                     = 12294,
     SPELL_WARRIOR_MORTAL_WOUNDS                     = 213667,
+    SPELL_WARRIOR_MEAT_CLEAVER_PROC                 = 85739,
     SPELL_WARRIOR_RALLYING_CRY                      = 97463,
     SPELL_WARRIOR_REND                              = 94009,
     SPELL_WARRIOR_RETALIATION_DAMAGE                = 22858,
@@ -83,6 +84,11 @@ enum WarriorSpells
     SPELL_WARRIOR_JUMP_TO_SKYHOLD_JUMP              = 192085,
     SPELL_WARRIOR_JUMP_TO_SKYHOLD_TELEPORT          = 216016,
     SPELL_WARRIOR_JUMP_TO_SKYHOLD_AURA              = 215997,
+    SPELL_WARRIOR_WHIRLWIND                         = 190411,
+    SPELL_WARRIOR_WHIRLWIND_ARMS                    = 1680,
+    SPELL_WARRIOR_WHIRLWIND_MAINHAND                = 199667,
+    SPELL_WARRIOR_WHIRLWIND_OFFHAND                 = 44949,
+    SPELL_WARRIOR_WRECKING_BALL_EFFECT              = 215570,
 };
 
 enum WarriorMisc
@@ -1480,6 +1486,31 @@ class spell_warr_vigilance_trigger : public SpellScriptLoader
         }
 };
 
+// Whirlwind - 190411
+class spell_warr_whirlwind : public SpellScript
+{
+    PrepareSpellScript(spell_warr_whirlwind);
+
+    void HandleProc()
+    {
+        if (Unit* caster = GetCaster())
+            caster->CastSpell(caster, SPELL_WARRIOR_MEAT_CLEAVER_PROC, true);
+    }
+
+    void HandleAfterCast()
+    {
+        if (Unit* caster = GetCaster())
+            if (caster->HasAura(SPELL_WARRIOR_WRECKING_BALL_EFFECT))
+                caster->RemoveAura(SPELL_WARRIOR_WRECKING_BALL_EFFECT);
+    }
+
+    void Register() override
+    {
+        OnCast += SpellCastFn(spell_warr_whirlwind::HandleProc);
+        AfterCast += SpellCastFn(spell_warr_whirlwind::HandleAfterCast);
+    }
+};
+
 void AddSC_warrior_spell_scripts()
 {
     new spell_warr_bloodthirst();
@@ -1517,4 +1548,5 @@ void AddSC_warrior_spell_scripts()
     new spell_warr_vigilance();
     new spell_warr_vigilance_trigger();
     new spell_warr_jump_to_skyhold();
+    new spell_warr_whirlwind();
 }
