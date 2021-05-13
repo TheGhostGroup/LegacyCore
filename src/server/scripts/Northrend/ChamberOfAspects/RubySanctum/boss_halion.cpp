@@ -572,6 +572,7 @@ class npc_halion_controller : public CreatureScript
                 _materialCorporealityValue = 5;
                 _materialDamageTaken = 0;
                 _twilightDamageTaken = 0;
+                SetBoundary(_instance->GetBossBoundary(DATA_HALION));
             }
 
             void JustAppeared() override
@@ -1900,8 +1901,6 @@ class spell_halion_blazing_aura : public SpellScriptLoader
             return new spell_halion_blazing_aura_SpellScript();
         }
 };
-
-
 
 void AddSC_boss_halion()
 {
