@@ -692,7 +692,7 @@ public:
         if (*args)
             range = atoi((char*)args);
 
-        RespawnVector respawns;
+        std::vector<RespawnInfo*> respawns;
         LocaleConstant locale = handler->GetSession()->GetSessionDbcLocale();
         char const* stringOverdue = sObjectMgr->GetTrinityString(LANG_LIST_RESPAWNS_OVERDUE, locale);
         char const* stringCreature = sObjectMgr->GetTrinityString(LANG_LIST_RESPAWNS_CREATURES, locale);
@@ -760,7 +760,7 @@ public:
 
         handler->PSendSysMessage(LANG_DEBUG_SCENE_OBJECT_LIST, target->GetSceneMgr().GetActiveSceneCount());
 
-        for (auto instanceByPackage : instanceByPackageMap)
+        for (auto const& instanceByPackage : instanceByPackageMap)
             handler->PSendSysMessage(LANG_DEBUG_SCENE_OBJECT_DETAIL, instanceByPackage.second->ScenePackageId, instanceByPackage.first);
 
         return true;

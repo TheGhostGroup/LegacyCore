@@ -59,6 +59,7 @@
 #include "InstanceSaveMgr.h"
 #include "IPLocation.h"
 #include "Language.h"
+#include "LanguageMgr.h"
 #include "LFGMgr.h"
 #include "Log.h"
 #include "LootItemStorage.h"
@@ -650,19 +651,6 @@ void World::LoadConfigSettings(bool reload)
     }
     for (uint8 i = 0; i < MAX_MOVE_TYPE; ++i) playerBaseMoveSpeed[i] = baseMoveSpeed[i] * rate_values[RATE_MOVESPEED];
     rate_values[RATE_CORPSE_DECAY_LOOTED] = sConfigMgr->GetFloatDefault("Rate.Corpse.Decay.Looted", 0.5f);
-
-    rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] = sConfigMgr->GetFloatDefault("TargetPosRecalculateRange", 1.5f);
-    if (rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] < CONTACT_DISTANCE)
-    {
-        TC_LOG_ERROR("server.loading", "TargetPosRecalculateRange (%f) must be >= %f. Using %f instead.", rate_values[RATE_TARGET_POS_RECALCULATION_RANGE], CONTACT_DISTANCE, CONTACT_DISTANCE);
-        rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] = CONTACT_DISTANCE;
-    }
-    else if (rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] > NOMINAL_MELEE_RANGE)
-    {
-        TC_LOG_ERROR("server.loading", "TargetPosRecalculateRange (%f) must be <= %f. Using %f instead.",
-            rate_values[RATE_TARGET_POS_RECALCULATION_RANGE], NOMINAL_MELEE_RANGE, NOMINAL_MELEE_RANGE);
-        rate_values[RATE_TARGET_POS_RECALCULATION_RANGE] = NOMINAL_MELEE_RANGE;
-    }
 
     rate_values[RATE_DURABILITY_LOSS_ON_DEATH]  = sConfigMgr->GetFloatDefault("DurabilityLoss.OnDeath", 10.0f);
     if (rate_values[RATE_DURABILITY_LOSS_ON_DEATH] < 0.0f)
@@ -1782,6 +1770,12 @@ void World::SetInitialWorldSettings()
     TC_LOG_INFO("server.loading", "Loading Spell Totem models...");
     sSpellMgr->LoadSpellTotemModel();
 
+    TC_LOG_INFO("server.loading", "Loading languages...");  // must be after LoadSpellInfoStore and LoadSkillLineAbilityMap
+    sLanguageMgr->LoadLanguages();
+
+    TC_LOG_INFO("server.loading", "Loading languages words...");
+    sLanguageMgr->LoadLanguagesWords();
+
     TC_LOG_INFO("server.loading", "Loading GameObject models...");
     LoadGameObjectModelList(m_dataPath);
 
@@ -2737,13 +2731,24 @@ namespace Trinity
 {
     class WorldWorldTextBuilder
     {
+        class MultiplePacketSender
+        {
         public:
-            typedef std::vector<WorldPackets::Packet*> WorldPacketList;
+            void operator()(Player const* receiver) const
+            {
+                for (std::unique_ptr<WorldPackets::Packet> const& packet : Packets)
+                    receiver->SendDirectMessage(packet->GetRawPacket());
+            }
+
+            std::vector<std::unique_ptr<WorldPackets::Packet>> Packets;
+        };
+
+        public:
             static size_t const BufferSize = 2048;
 
             explicit WorldWorldTextBuilder(uint32 textId, va_list* args = nullptr) : i_textId(textId), i_args(args) { }
 
-            void operator()(WorldPacketList& dataList, LocaleConstant locale)
+            MultiplePacketSender* operator()(LocaleConstant locale)
             {
                 char const* text = sObjectMgr->GetTrinityString(i_textId, locale);
 
@@ -2762,18 +2767,20 @@ namespace Trinity
                     strBuffer[BufferSize - 1] = '\0';
                 }
 
-                do_helper(dataList, strBuffer);
+                MultiplePacketSender* sender = new MultiplePacketSender();
+                do_helper(sender->Packets, strBuffer);
+                return sender;
             }
 
         private:
-            void do_helper(WorldPacketList& dataList, char* text)
+            void do_helper(std::vector<std::unique_ptr<WorldPackets::Packet>>& dataList, char* text)
             {
                 while (char* line = ChatHandler::LineFromMessage(text))
                 {
                     WorldPackets::Chat::Chat* packet = new WorldPackets::Chat::Chat();
                     packet->Initialize(CHAT_MSG_SYSTEM, LANG_UNIVERSAL, nullptr, nullptr, line);
                     packet->Write();
-                    dataList.push_back(packet);
+                    dataList.emplace_back(packet);
                 }
             }
 
@@ -2789,7 +2796,7 @@ void World::SendWorldText(uint32 string_id, ...)
     va_start(ap, string_id);
 
     Trinity::WorldWorldTextBuilder wt_builder(string_id, &ap);
-    Trinity::LocalizedPacketListDo<Trinity::WorldWorldTextBuilder> wt_do(wt_builder);
+    Trinity::LocalizedDo<Trinity::WorldWorldTextBuilder> wt_do(wt_builder);
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
     {
         if (!itr->second || !itr->second->GetPlayer() || !itr->second->GetPlayer()->IsInWorld())
@@ -2808,7 +2815,7 @@ void World::SendGMText(uint32 string_id, ...)
     va_start(ap, string_id);
 
     Trinity::WorldWorldTextBuilder wt_builder(string_id, &ap);
-    Trinity::LocalizedPacketListDo<Trinity::WorldWorldTextBuilder> wt_do(wt_builder);
+    Trinity::LocalizedDo<Trinity::WorldWorldTextBuilder> wt_do(wt_builder);
     for (SessionMap::const_iterator itr = m_sessions.begin(); itr != m_sessions.end(); ++itr)
     {
         // Session should have permissions to receive global gm messages

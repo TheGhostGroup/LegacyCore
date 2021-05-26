@@ -489,27 +489,43 @@ void WorldSession::HandleAreaTriggerOpcode(WorldPackets::AreaTrigger::AreaTrigge
 
     if (player->IsAlive())
     {
+        // not using Player::UpdateQuestObjectiveProgress, ObjectID in quest_objectives can be set to -1, areatrigger_involvedrelation then holds correct id
         if (std::unordered_set<uint32> const* quests = sObjectMgr->GetQuestsForAreaTrigger(packet.AreaTriggerID))
         {
+            bool anyObjectiveChangedCompletionState = false;
             for (uint32 questId : *quests)
             {
                 Quest const* qInfo = sObjectMgr->GetQuestTemplate(questId);
-                if (qInfo && player->GetQuestStatus(questId) == QUEST_STATUS_INCOMPLETE)
+                uint16 slot = player->FindQuestSlot(questId);
+                if (qInfo && slot < MAX_QUEST_LOG_SIZE && player->GetQuestStatus(questId) == QUEST_STATUS_INCOMPLETE)
                 {
                     for (QuestObjective const& obj : qInfo->Objectives)
                     {
-                        if (obj.Type == QUEST_OBJECTIVE_AREATRIGGER && !player->IsQuestObjectiveComplete(obj))
-                        {
-                            player->SetQuestObjectiveData(obj, 1);
-                            player->SendQuestUpdateAddCreditSimple(obj);
-                            break;
-                        }
+                        if (obj.Type != QUEST_OBJECTIVE_AREATRIGGER)
+                            continue;
+
+                        if (!player->IsQuestObjectiveCompletable(slot, qInfo, obj))
+                            continue;
+
+                        if (player->IsQuestObjectiveComplete(slot, qInfo, obj))
+                            continue;
+
+                        if (obj.ObjectID != -1 && obj.ObjectID != packet.AreaTriggerID)
+                            continue;
+
+                        player->SetQuestObjectiveData(obj, 1);
+                        player->SendQuestUpdateAddCreditSimple(obj);
+                        anyObjectiveChangedCompletionState = true;
+                        break;
                     }
 
                     if (player->CanCompleteQuest(questId))
                         player->CompleteQuest(questId);
                 }
             }
+
+            if (anyObjectiveChangedCompletionState)
+                player->UpdateForQuestWorldObjects();
         }
     }
 

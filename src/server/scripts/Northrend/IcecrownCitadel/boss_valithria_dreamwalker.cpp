@@ -230,44 +230,10 @@ class ValithriaDespawner : public BasicEvent
 
         void operator()(Creature* creature) const
         {
-            switch (creature->GetEntry())
-            {
-                case NPC_VALITHRIA_DREAMWALKER:
-                    if (InstanceScript* instance = creature->GetInstanceScript())
-                        instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, creature);
-                    break;
-                case NPC_BLAZING_SKELETON:
-                case NPC_SUPPRESSER:
-                case NPC_BLISTERING_ZOMBIE:
-                case NPC_GLUTTONOUS_ABOMINATION:
-                case NPC_MANA_VOID:
-                case NPC_COLUMN_OF_FROST:
-                case NPC_ROT_WORM:
-                    creature->DespawnOrUnsummon();
-                    return;
-                case NPC_RISEN_ARCHMAGE:
-                    if (!creature->GetSpawnId())
-                    {
-                        creature->DespawnOrUnsummon();
-                        return;
-                    }
-                    creature->Respawn(true);
-                    break;
-                default:
-                    return;
-            }
-
-            uint32 corpseDelay = creature->GetCorpseDelay();
-            uint32 respawnDelay = creature->GetRespawnDelay();
-            creature->SetCorpseDelay(1);
-            creature->SetRespawnDelay(10);
-
-            if (CreatureData const* data = creature->GetCreatureData())
-                creature->UpdatePosition(data->spawnPoint);
-            creature->DespawnOrUnsummon();
-
-            creature->SetCorpseDelay(corpseDelay);
-            creature->SetRespawnDelay(respawnDelay);
+            if (creature->GetEntry() == NPC_VALITHRIA_DREAMWALKER)
+                if (InstanceScript* instance = creature->GetInstanceScript())
+                    instance->SendEncounterUnit(ENCOUNTER_FRAME_DISENGAGE, creature);
+            creature->DespawnOrUnsummon(0, 10s);
         }
 
     private:
@@ -365,7 +331,7 @@ class boss_valithria_dreamwalker : public CreatureScript
                 }
                 else if (_instance->GetBossState(DATA_VALITHRIA_DREAMWALKER) == NOT_STARTED)
                     if (Creature* archmage = me->FindNearestCreature(NPC_RISEN_ARCHMAGE, 30.0f))
-                        archmage->AI()->DoZoneInCombat();   // call JustEngagedWith on one of them, that will make it all start
+                        archmage->EngageWithTarget(healer);   // call JustEngagedWith on one of them, that will make it all start
             }
 
             void DamageTaken(Unit* /*attacker*/, uint32& damage) override
@@ -512,7 +478,7 @@ class npc_green_dragon_combat_trigger : public CreatureScript
                 me->SetReactState(REACT_PASSIVE);
             }
 
-            void JustEngagedWith(Unit* target) override
+            void JustEnteredCombat(Unit* target) override
             {
                 if (!instance->CheckRequiredBosses(DATA_VALITHRIA_DREAMWALKER, target->ToPlayer()))
                 {
@@ -539,9 +505,9 @@ class npc_green_dragon_combat_trigger : public CreatureScript
                 return target->GetTypeId() == TYPEID_PLAYER;
             }
 
-            void JustReachedHome() override
+            void JustExitedCombat() override
             {
-                _JustReachedHome();
+                me->setActive(false);
                 DoAction(ACTION_DEATH);
             }
 
@@ -550,7 +516,7 @@ class npc_green_dragon_combat_trigger : public CreatureScript
                 if (action == ACTION_DEATH)
                 {
                     instance->SetBossState(DATA_VALITHRIA_DREAMWALKER, NOT_STARTED);
-                    me->m_Events.AddEvent(new ValithriaDespawner(me), me->m_Events.CalculateTime(5000));
+                    me->m_Events.AddEventAtOffset(new ValithriaDespawner(me), 5s);
                 }
             }
 
@@ -559,25 +525,15 @@ class npc_green_dragon_combat_trigger : public CreatureScript
                 if (!me->IsInCombat())
                     return;
 
-                // @TODO check out of bounds on all encounter creatures, evade if matched
-
-                std::list<HostileReference*> const& threatList = me->GetThreatManager().getThreatList();
-                if (threatList.empty())
-                {
-                    EnterEvadeMode();
-                    return;
-                }
-
                 // check evade every second tick
                 _evadeCheck ^= true;
                 if (!_evadeCheck)
                     return;
 
-                // check if there is any player on threatlist, if not - evade
-                for (std::list<HostileReference*>::const_iterator itr = threatList.begin(); itr != threatList.end(); ++itr)
-                    if (Unit* target = (*itr)->getTarget())
-                        if (target->GetTypeId() == TYPEID_PLAYER)
-                            return; // found any player, return
+                // check if there is any player engaged, if not - evade
+                for (auto const& pair : me->GetCombatManager().GetPvECombatRefs())
+                    if (pair.second->GetOther(me)->GetTypeId() == TYPEID_PLAYER)
+                        return;
 
                 EnterEvadeMode();
             }
@@ -638,8 +594,9 @@ class npc_the_lich_king_controller : public CreatureScript
             {
                 // must not be in dream phase
                 PhasingHandler::RemovePhase(summon, 173, true);
+                summon->AI()->DoZoneInCombat();
                 if (summon->GetEntry() != NPC_SUPPRESSER)
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 0.0f, true))
+                    if (Unit* target = me->GetCombatManager().GetAnyTarget())
                         summon->AI()->AttackStart(target);
             }
 
@@ -721,7 +678,7 @@ class npc_risen_archmage : public CreatureScript
                 Initialize();
             }
 
-            void JustEngagedWith(Unit* /*target*/) override
+            void JustEngagedWith(Unit* target) override
             {
                 me->FinishSpell(CURRENT_CHANNELED_SPELL, false);
                 if (me->GetSpawnId() && _canCallJustEngagedWith)
@@ -734,10 +691,16 @@ class npc_risen_archmage : public CreatureScript
                         (*itr)->AI()->DoAction(ACTION_ENTER_COMBAT);
 
                     if (Creature* lichKing = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_LICH_KING)))
+                    {
+                        lichKing->EngageWithTarget(target);
                         lichKing->AI()->DoZoneInCombat();
+                    }
 
                     if (Creature* trigger = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_TRIGGER)))
+                    {
+                        trigger->EngageWithTarget(target);
                         trigger->AI()->DoZoneInCombat();
+                    }
                 }
             }
 
@@ -893,7 +856,24 @@ class npc_suppresser : public CreatureScript
             void IsSummonedBy(Unit* /*summoner*/) override
             {
                 if (Creature* valithria = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_DREAMWALKER)))
-                    AttackStart(valithria);
+                {
+                    float x, y, z;
+                    valithria->GetContactPoint(me, x,y,z);
+                    me->GetMotionMaster()->MovePoint(42, x, y, z);
+                }
+            }
+
+            void MovementInform(uint32 /*type*/, uint32 id) override
+            {
+                if (id == 42)
+                {
+                    me->SetReactState(REACT_AGGRESSIVE);
+                    if (Creature* valithria = ObjectAccessor::GetCreature(*me, _instance->GetGuidData(DATA_VALITHRIA_DREAMWALKER)))
+                    {
+                        AttackStart(valithria);
+                        DoCastAOE(SPELL_SUPPRESSION);
+                    }
+                }
             }
 
             void UpdateAI(uint32 diff) override

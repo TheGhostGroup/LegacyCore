@@ -1186,7 +1186,7 @@ void Pet::_LoadAuras(uint32 timediff)
             }
 
             // negative effects should continue counting down after logout
-            if (remainTime != -1 && !spellInfo->IsPositive())
+            if (remainTime != -1 && (!spellInfo->IsPositive() || spellInfo->HasAttribute(SPELL_ATTR4_AURA_EXPIRES_OFFLINE)))
             {
                 if (remainTime/IN_MILLISECONDS <= int32(timediff))
                     continue;
@@ -1629,6 +1629,8 @@ bool Pet::Create(ObjectGuid::LowType guidlow, Map* map, uint32 Entry)
     // Force regen flag for player pets, just like we do for players themselves
     AddUnitFlag2(UNIT_FLAG2_REGENERATE_POWER);
     SetSheath(SHEATH_STATE_MELEE);
+
+    GetThreatManager().Initialize();
 
     return true;
 }

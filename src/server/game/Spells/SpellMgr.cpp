@@ -23,6 +23,7 @@
 #include "Containers.h"
 #include "DB2Stores.h"
 #include "DatabaseEnv.h"
+#include "LanguageMgr.h"
 #include "Log.h"
 #include "MotionMaster.h"
 #include "ObjectMgr.h"
@@ -2485,6 +2486,9 @@ void SpellMgr::LoadSpellInfoStore()
                 if (summonProperties->Slot == SUMMON_SLOT_MINIPET && summonProperties->Flags & SUMMON_PROP_FLAG_COMPANION)
                     if (BattlePetSpeciesEntry const* battlePetSpecies = Trinity::Containers::MapGetValuePtr(battlePetSpeciesByCreature, effect->EffectMiscValue[0]))
                         mBattlePets[effect->SpellID] = battlePetSpecies;
+
+        if (effect->Effect == SPELL_EFFECT_LANGUAGE)
+            sLanguageMgr->LoadSpellEffectLanguage(effect);
     }
 
     for (SpellAuraOptionsEntry const* auraOptions : sSpellAuraOptionsStore)
@@ -4117,7 +4121,7 @@ void SpellMgr::LoadSpellInfoCorrections()
     ApplySpellFix({ 70106 }, [](SpellInfo* spellInfo)
     {
         spellInfo->AttributesEx3 |= SPELL_ATTR3_NO_DONE_BONUS;
-        spellInfo->AttributesEx6 |= SPELL_ATTR6_NO_DONE_PCT_DAMAGE_MODS;
+        spellInfo->AttributesEx6 |= SPELL_ATTR6_IGNORE_CASTER_DAMAGE_MODIFIERS;
     });
 
     // Ice Lock

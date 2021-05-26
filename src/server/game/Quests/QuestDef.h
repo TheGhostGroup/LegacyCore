@@ -21,14 +21,15 @@
 #include "Common.h"
 #include "DBCEnums.h"
 #include "DatabaseEnvFwd.h"
+#include "LootItemType.h"
 #include "Optional.h"
 #include "RaceMask.h"
 #include "SharedDefines.h"
 #include "WorldPacket.h"
+#include <bitset>
 #include <vector>
 
 class Player;
-enum class LootItemType : uint8;
 
 namespace WorldPackets
 {
@@ -140,8 +141,6 @@ enum class QuestGiverStatus : uint32
     CovenantCallingQuest                = 0x080000,
     CovenantCallingRewardCompleteNoPOI  = 0x100000,
     CovenantCallingRewardCompletePOI    = 0x200000,
-
-    ScriptedDefault                     = 0x80000000
 };
 
 DEFINE_ENUM_FLAG(QuestGiverStatus);
@@ -250,17 +249,11 @@ enum QuestSpecialFlags
     QUEST_SPECIAL_FLAGS_AUTO_ACCEPT          = 0x004,   // Set by 4 in SpecialFlags in DB if the quest is to be auto-accepted.
     QUEST_SPECIAL_FLAGS_DF_QUEST             = 0x008,   // Set by 8 in SpecialFlags in DB if the quest is used by Dungeon Finder.
     QUEST_SPECIAL_FLAGS_MONTHLY              = 0x010,   // Set by 16 in SpecialFlags in DB if the quest is reset at the begining of the month
-    QUEST_SPECIAL_FLAGS_CAST                 = 0x020,   // Set by 32 in SpecialFlags in DB if the quest requires RequiredOrNpcGo killcredit but NOT kill (a spell cast)
     // room for more custom flags
 
-    QUEST_SPECIAL_FLAGS_DB_ALLOWED = QUEST_SPECIAL_FLAGS_REPEATABLE | QUEST_SPECIAL_FLAGS_EXPLORATION_OR_EVENT | QUEST_SPECIAL_FLAGS_AUTO_ACCEPT | QUEST_SPECIAL_FLAGS_DF_QUEST | QUEST_SPECIAL_FLAGS_MONTHLY | QUEST_SPECIAL_FLAGS_CAST,
+    QUEST_SPECIAL_FLAGS_DB_ALLOWED = QUEST_SPECIAL_FLAGS_REPEATABLE | QUEST_SPECIAL_FLAGS_EXPLORATION_OR_EVENT | QUEST_SPECIAL_FLAGS_AUTO_ACCEPT | QUEST_SPECIAL_FLAGS_DF_QUEST | QUEST_SPECIAL_FLAGS_MONTHLY,
 
-    QUEST_SPECIAL_FLAGS_DELIVER              = 0x080,   // Internal flag computed only
-    QUEST_SPECIAL_FLAGS_SPEAKTO              = 0x100,   // Internal flag computed only
-    QUEST_SPECIAL_FLAGS_KILL                 = 0x200,   // Internal flag computed only
-    QUEST_SPECIAL_FLAGS_TIMED                = 0x400,   // Internal flag computed only
-    QUEST_SPECIAL_FLAGS_PLAYER_KILL          = 0x800,   // Internal flag computed only
-    QUEST_SPECIAL_FLAGS_COMPLETED_AT_START   = 0x1000   // Internal flag computed only
+    QUEST_SPECIAL_FLAGS_SEQUENCED_OBJECTIVES = 0x020,    // Internal flag computed only
 };
 
 enum class QuestTagType
@@ -305,7 +298,9 @@ enum QuestObjectiveType
     QUEST_OBJECTIVE_OBTAIN_CURRENCY         = 17,   // requires the player to gain X currency after starting the quest but not required to keep it until the end (does not consume)
     QUEST_OBJECTIVE_INCREASE_REPUTATION     = 18,   // requires the player to gain X reputation with a faction
     QUEST_OBJECTIVE_AREA_TRIGGER_ENTER      = 19,
-    QUEST_OBJECTIVE_AREA_TRIGGER_EXIT       = 20
+    QUEST_OBJECTIVE_AREA_TRIGGER_EXIT       = 20,
+
+    MAX_QUEST_OBJECTIVE_TYPE
 };
 
 enum QuestObjectiveFlags
@@ -378,6 +373,26 @@ struct QuestObjective
     std::string Description;
     std::vector<int32> VisualEffects;
 
+    bool IsStoringValue() const
+    {
+        switch (Type)
+        {
+            case QUEST_OBJECTIVE_MONSTER:
+            case QUEST_OBJECTIVE_ITEM:
+            case QUEST_OBJECTIVE_GAMEOBJECT:
+            case QUEST_OBJECTIVE_TALKTO:
+            case QUEST_OBJECTIVE_PLAYERKILLS:
+            case QUEST_OBJECTIVE_WINPVPPETBATTLES:
+            case QUEST_OBJECTIVE_HAVE_CURRENCY:
+            case QUEST_OBJECTIVE_OBTAIN_CURRENCY:
+            case QUEST_OBJECTIVE_INCREASE_REPUTATION:
+                return true;
+            default:
+                break;
+        }
+        return false;
+    }
+
     bool IsStoringFlag() const
     {
         switch (Type)
@@ -386,6 +401,27 @@ struct QuestObjective
             case QUEST_OBJECTIVE_WINPETBATTLEAGAINSTNPC:
             case QUEST_OBJECTIVE_DEFEATBATTLEPET:
             case QUEST_OBJECTIVE_CRITERIA_TREE:
+            case QUEST_OBJECTIVE_AREA_TRIGGER_ENTER:
+            case QUEST_OBJECTIVE_AREA_TRIGGER_EXIT:
+                return true;
+            default:
+                break;
+        }
+        return false;
+    }
+
+    static constexpr bool CanAlwaysBeProgressedInRaid(QuestObjectiveType type)
+    {
+        switch (type)
+        {
+            case QUEST_OBJECTIVE_ITEM:
+            case QUEST_OBJECTIVE_CURRENCY:
+            case QUEST_OBJECTIVE_LEARNSPELL:
+            case QUEST_OBJECTIVE_MIN_REPUTATION:
+            case QUEST_OBJECTIVE_MAX_REPUTATION:
+            case QUEST_OBJECTIVE_MONEY:
+            case QUEST_OBJECTIVE_HAVE_CURRENCY:
+            case QUEST_OBJECTIVE_INCREASE_REPUTATION:
                 return true;
             default:
                 break;
@@ -436,6 +472,7 @@ class TC_GAME_API Quest
 
         bool HasSpecialFlag(uint32 flag) const { return (_specialFlags & flag) != 0; }
         void SetSpecialFlag(uint32 flag) { _specialFlags |= flag; }
+        bool HasQuestObjectiveType(QuestObjectiveType type) const { return _usedQuestObjectiveTypes[type]; }
 
         bool IsAutoPush() const { return HasFlagEx(QUEST_FLAGS_EX_AUTO_PUSH); }
         bool IsWorldQuest() const { return HasFlagEx(QUEST_FLAGS_EX_IS_WORLD_QUEST); }
@@ -664,6 +701,7 @@ class TC_GAME_API Quest
         uint32 _sourceItemIdCount    = 0;
         uint32 _rewardMailSenderEntry = 0;
         uint32 _specialFlags         = 0; // custom flags, not sniffed/WDB
+        std::bitset<MAX_QUEST_OBJECTIVE_TYPE> _usedQuestObjectiveTypes;
         uint32 _scriptId             = 0;
 
         // Helpers
@@ -672,9 +710,10 @@ class TC_GAME_API Quest
 
 struct QuestStatusData
 {
+    uint16 Slot = MAX_QUEST_LOG_SIZE;
     QuestStatus Status = QUEST_STATUS_NONE;
     uint32 Timer = 0;
-    std::vector<int32> ObjectiveData;
+    bool Explored = false;
 };
 
 #endif

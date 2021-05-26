@@ -74,7 +74,7 @@ class npc_millhouse_manastorm : public CreatureScript
 
         struct npc_millhouse_manastormAI : public ScriptedAI
         {
-            npc_millhouse_manastormAI(Creature* creature) : ScriptedAI(creature)
+            npc_millhouse_manastormAI(Creature* creature) : ScriptedAI(creature), Init(false)
             {
                 Initialize();
                 instance = creature->GetInstanceScript();
@@ -84,7 +84,6 @@ class npc_millhouse_manastorm : public CreatureScript
             {
                 EventProgress_Timer = 2000;
                 LowHp = false;
-                Init = false;
                 Phase = 1;
 
                 Pyroblast_Timer = 1000;
@@ -106,7 +105,10 @@ class npc_millhouse_manastorm : public CreatureScript
                 Initialize();
 
                 if (instance->GetData(DATA_WARDEN_2) == DONE)
+                {
                     Init = true;
+                    me->SetImmuneToNPC(false);
+                }
 
                 if (instance->GetBossState(DATA_HARBINGER_SKYRISS) == DONE)
                     Talk(SAY_COMPLETE);
@@ -178,6 +180,7 @@ class npc_millhouse_manastorm : public CreatureScript
                             case 7:
                                 instance->SetData(DATA_WARDEN_2, DONE);
                                 Init = true;
+                                me->SetImmuneToNPC(false);
                                 break;
                             }
                             ++Phase;

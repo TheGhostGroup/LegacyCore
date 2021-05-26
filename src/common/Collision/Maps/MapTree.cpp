@@ -16,17 +16,17 @@
  */
 
 #include "MapTree.h"
-#include "ModelInstance.h"
-#include "VMapManager2.h"
-#include "VMapDefinitions.h"
-#include "Log.h"
 #include "Errors.h"
+#include "Log.h"
 #include "Metric.h"
-
-#include <string>
-#include <sstream>
+#include "ModelInstance.h"
+#include "VMapDefinitions.h"
+#include "VMapManager2.h"
+#include "WorldModel.h"
 #include <iomanip>
 #include <limits>
+#include <sstream>
+#include <string>
 
 using G3D::Vector3;
 
@@ -353,9 +353,10 @@ namespace VMAP
     {
         for (loadedSpawnMap::iterator i = iLoadedSpawns.begin(); i != iLoadedSpawns.end(); ++i)
         {
-            iTreeValues[i->first].setUnloaded();
             for (uint32 refCount = 0; refCount < i->second; ++refCount)
-                vm->releaseModelInstance(iTreeValues[i->first].name);
+                vm->releaseModelInstance(iTreeValues[i->first].getWorldModel()->GetName());
+
+            iTreeValues[i->first].setUnloaded();
         }
         iLoadedSpawns.clear();
         iLoadedTiles.clear();

@@ -242,14 +242,15 @@ void SmartAI::EndPath(bool fail)
     if (fail)
         return;
 
-    GetScript()->ProcessEventsFor(SMART_EVENT_WAYPOINT_ENDED, nullptr, _currentWaypointNode, GetScript()->GetPathId());
+    uint32 pathid = GetScript()->GetPathId();
+    GetScript()->ProcessEventsFor(SMART_EVENT_WAYPOINT_ENDED, nullptr, _currentWaypointNode, pathid);
 
     if (_repeatWaypointPath)
     {
         if (IsAIControlled())
             StartPath(mRun, GetScript()->GetPathId(), _repeatWaypointPath);
     }
-    else
+    else if (pathid == GetScript()->GetPathId()) // if it's not the same pathid, our script wants to start another path; don't override it
         GetScript()->SetPathId(0);
 
     if (mDespawnState == 1)
@@ -341,11 +342,12 @@ bool SmartAI::IsEscortInvokerInRange()
 }
 
 ///@todo move escort related logic
-void SmartAI::WaypointPathStarted(uint32 nodeId, uint32 pathId)
+void SmartAI::WaypointPathStarted(uint32 pathId)
 {
     if (!HasEscortState(SMART_ESCORT_ESCORTING))
     {
-        GetScript()->ProcessEventsFor(SMART_EVENT_WAYPOINT_START, nullptr, nodeId, pathId);
+        // @todo remove the constant 1 at some point, it's never anything different
+        GetScript()->ProcessEventsFor(SMART_EVENT_WAYPOINT_START, nullptr, 1, pathId);
         return;
     }
 }
@@ -766,7 +768,7 @@ void SmartAI::QuestAccept(Player* player, Quest const* quest)
     GetScript()->ProcessEventsFor(SMART_EVENT_ACCEPTED_QUEST, player, quest->GetQuestId());
 }
 
-void SmartAI::QuestReward(Player* player, Quest const* quest, uint32 opt)
+void SmartAI::QuestReward(Player* player, Quest const* quest, LootItemType /*type*/, uint32 opt)
 {
     GetScript()->ProcessEventsFor(SMART_EVENT_REWARD_QUEST, player, quest->GetQuestId(), opt);
 }
@@ -1033,7 +1035,7 @@ void SmartGameObjectAI::QuestAccept(Player* player, Quest const* quest)
 }
 
 // Called when a player selects a quest reward.
-void SmartGameObjectAI::QuestReward(Player* player, Quest const* quest, uint32 opt)
+void SmartGameObjectAI::QuestReward(Player* player, Quest const* quest, LootItemType /*type*/, uint32 opt)
 {
     GetScript()->ProcessEventsFor(SMART_EVENT_REWARD_QUEST, player, quest->GetQuestId(), opt, false, nullptr, me);
 }
@@ -1170,7 +1172,7 @@ public:
     SmartQuest() : QuestScript("SmartQuest") { }
 
     // Called when a quest status change
-    void OnQuestStatusChange(Player* player, Quest const* quest, QuestStatus /*oldStatus*/, QuestStatus newStatus)
+    void OnQuestStatusChange(Player* player, Quest const* quest, QuestStatus /*oldStatus*/, QuestStatus newStatus) override
     {
         SmartScript smartScript;
         smartScript.OnInitialize(nullptr, nullptr, nullptr, quest);
@@ -1195,9 +1197,10 @@ public:
     }
 
     // Called when a quest objective data change
-    void OnQuestObjectiveChange(Player* player, Quest const* quest, QuestObjective const& objective, int32 /*oldAmount*/, int32 /*newAmount*/)
+    void OnQuestObjectiveChange(Player* player, Quest const* quest, QuestObjective const& objective, int32 /*oldAmount*/, int32 /*newAmount*/) override
     {
-        if (player->IsQuestObjectiveComplete(objective))
+        uint16 slot = player->FindQuestSlot(quest->GetQuestId());
+        if (slot < MAX_QUEST_LOG_SIZE && player->IsQuestObjectiveComplete(slot, quest, objective))
         {
             SmartScript smartScript;
             smartScript.OnInitialize(nullptr, nullptr, nullptr, quest);
