@@ -810,7 +810,7 @@ struct SmartAction
         struct
         {
             uint32 delay;
-            uint32 respawn;
+            uint32 forceRespawnTimer;
         } forceDespawn;
 
         struct
@@ -851,6 +851,7 @@ struct SmartAction
         {
             uint32 entry;
             uint32 despawnTime;
+            uint32 summonType;
         } summonGO;
 
         struct
@@ -1230,7 +1231,7 @@ enum SMARTAI_TEMPLATE
 
 enum SMARTAI_TARGETS
 {
-    SMART_TARGET_NONE                           = 0,    // NONE, defaulting to invoket
+    SMART_TARGET_NONE                           = 0,    // NONE
     SMART_TARGET_SELF                           = 1,    // Self cast
     SMART_TARGET_VICTIM                         = 2,    // Our current target (ie: highest aggro)
     SMART_TARGET_HOSTILE_SECOND_AGGRO           = 3,    // Second highest aggro, maxdist, playerOnly, powerType + 1
@@ -1259,7 +1260,7 @@ enum SMARTAI_TARGETS
     SMART_TARGET_CLOSEST_FRIENDLY               = 26,   // maxDist, playerOnly
     SMART_TARGET_LOOT_RECIPIENTS                = 27,   // all players that have tagged this creature (for kill credit)
     SMART_TARGET_FARTHEST                       = 28,   // maxDist, playerOnly, isInLos
-    SMART_TARGET_VEHICLE_ACCESSORY              = 29,   // seat number (vehicle can target it's own accessory)
+    SMART_TARGET_VEHICLE_PASSENGER              = 29,   // seatMask (0 - all seats)
 
     SMART_TARGET_END                            = 30
 };
@@ -1387,7 +1388,7 @@ struct SmartTarget
 
         struct
         {
-            uint32 seat;
+            uint32 seatMask;
         } vehicle;
     };
 };
@@ -1659,6 +1660,8 @@ class TC_GAME_API SmartAIMgr
     private:
         //event stores
         SmartAIEventMap mEventMap[SMART_SCRIPT_TYPE_MAX];
+
+        static bool EventHasInvoker(SMART_EVENT event);
 
         bool IsEventValid(SmartScriptHolder& e);
         bool IsTargetValid(SmartScriptHolder const& e);

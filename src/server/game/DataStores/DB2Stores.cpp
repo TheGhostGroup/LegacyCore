@@ -42,6 +42,7 @@
 #endif
 
 DB2Storage<AchievementEntry>                    sAchievementStore("Achievement.db2", AchievementLoadInfo::Instance());
+DB2Storage<Achievement_CategoryEntry>           sAchievementCategoryStore("Achievement_Category.db2", AchievementCategoryLoadInfo::Instance());
 DB2Storage<AdventureJournalEntry>               sAdventureJournalStore("AdventureJournal.db2", AdventureJournalLoadInfo::Instance());
 DB2Storage<AdventureMapPOIEntry>                sAdventureMapPOIStore("AdventureMapPOI.db2", AdventureMapPoiLoadInfo::Instance());
 DB2Storage<AnimationDataEntry>                  sAnimationDataStore("AnimationData.db2", AnimationDataLoadInfo::Instance());
@@ -129,6 +130,8 @@ DB2Storage<ExpectedStatEntry>                   sExpectedStatStore("ExpectedStat
 DB2Storage<ExpectedStatModEntry>                sExpectedStatModStore("ExpectedStatMod.db2", ExpectedStatModLoadInfo::Instance());
 DB2Storage<FactionEntry>                        sFactionStore("Faction.db2", FactionLoadInfo::Instance());
 DB2Storage<FactionTemplateEntry>                sFactionTemplateStore("FactionTemplate.db2", FactionTemplateLoadInfo::Instance());
+DB2Storage<FriendshipRepReactionEntry>          sFriendshipRepReactionStore("FriendshipRepReaction.db2", FriendshipRepReactionLoadInfo::Instance());
+DB2Storage<FriendshipReputationEntry>           sFriendshipReputationStore("FriendshipReputation.db2", FriendshipReputationLoadInfo::Instance());
 DB2Storage<GameObjectDisplayInfoEntry>          sGameObjectDisplayInfoStore("GameObjectDisplayInfo.db2", GameobjectDisplayInfoLoadInfo::Instance());
 DB2Storage<GameObjectsEntry>                    sGameObjectsStore("GameObjects.db2", GameobjectsLoadInfo::Instance());
 DB2Storage<GarrAbilityEntry>                    sGarrAbilityStore("GarrAbility.db2", GarrAbilityLoadInfo::Instance());
@@ -183,6 +186,7 @@ DB2Storage<ItemLevelSelectorQualitySetEntry>    sItemLevelSelectorQualitySetStor
 DB2Storage<ItemLimitCategoryEntry>              sItemLimitCategoryStore("ItemLimitCategory.db2", ItemLimitCategoryLoadInfo::Instance());
 DB2Storage<ItemLimitCategoryConditionEntry>     sItemLimitCategoryConditionStore("ItemLimitCategoryCondition.db2", ItemLimitCategoryConditionLoadInfo::Instance());
 DB2Storage<ItemModifiedAppearanceEntry>         sItemModifiedAppearanceStore("ItemModifiedAppearance.db2", ItemModifiedAppearanceLoadInfo::Instance());
+DB2Storage<ItemModifiedAppearanceExtraEntry>    sItemModifiedAppearanceExtraStore("ItemModifiedAppearanceExtra.db2", ItemModifiedAppearanceExtraLoadInfo::Instance());
 DB2Storage<ItemNameDescriptionEntry>            sItemNameDescriptionStore("ItemNameDescription.db2", ItemNameDescriptionLoadInfo::Instance());
 DB2Storage<ItemPriceBaseEntry>                  sItemPriceBaseStore("ItemPriceBase.db2", ItemPriceBaseLoadInfo::Instance());
 DB2Storage<ItemSearchNameEntry>                 sItemSearchNameStore("ItemSearchName.db2", ItemSearchNameLoadInfo::Instance());
@@ -215,6 +219,7 @@ DB2Storage<NamesReservedEntry>                  sNamesReservedStore("NamesReserv
 DB2Storage<NamesReservedLocaleEntry>            sNamesReservedLocaleStore("NamesReservedLocale.db2", NamesReservedLocaleLoadInfo::Instance());
 DB2Storage<NumTalentsAtLevelEntry>              sNumTalentsAtLevelStore("NumTalentsAtLevel.db2", NumTalentsAtLevelLoadInfo::Instance());
 DB2Storage<OverrideSpellDataEntry>              sOverrideSpellDataStore("OverrideSpellData.db2", OverrideSpellDataLoadInfo::Instance());
+DB2Storage<ParagonReputationEntry>              sParagonReputationStore("ParagonReputation.db2", ParagonReputationLoadInfo::Instance());
 DB2Storage<PhaseEntry>                          sPhaseStore("Phase.db2", PhaseLoadInfo::Instance());
 DB2Storage<PhaseXPhaseGroupEntry>               sPhaseXPhaseGroupStore("PhaseXPhaseGroup.db2", PhaseXPhaseGroupLoadInfo::Instance());
 DB2Storage<PlayerConditionEntry>                sPlayerConditionStore("PlayerCondition.db2", PlayerConditionLoadInfo::Instance());
@@ -226,8 +231,10 @@ DB2Storage<PVPItemEntry>                        sPVPItemStore("PVPItem.db2", Pvp
 DB2Storage<PvpTalentEntry>                      sPvpTalentStore("PvpTalent.db2", PvpTalentLoadInfo::Instance());
 DB2Storage<PvpTalentCategoryEntry>              sPvpTalentCategoryStore("PvpTalentCategory.db2", PvpTalentCategoryLoadInfo::Instance());
 DB2Storage<PvpTalentSlotUnlockEntry>            sPvpTalentSlotUnlockStore("PvpTalentSlotUnlock.db2", PvpTalentSlotUnlockLoadInfo::Instance());
+DB2Storage<PvpTierEntry>                        sPvpTierStore("PvpTier.db2", PvpTierLoadInfo::Instance());
 DB2Storage<QuestFactionRewardEntry>             sQuestFactionRewardStore("QuestFactionReward.db2", QuestFactionRewardLoadInfo::Instance());
 DB2Storage<QuestInfoEntry>                      sQuestInfoStore("QuestInfo.db2", QuestInfoLoadInfo::Instance());
+DB2Storage<QuestLineXQuestEntry>                sQuestLineXQuestStore("QuestLineXQuest.db2", QuestLineXQuestLoadInfo::Instance());
 DB2Storage<QuestMoneyRewardEntry>               sQuestMoneyRewardStore("QuestMoneyReward.db2", QuestMoneyRewardLoadInfo::Instance());
 DB2Storage<QuestPackageItemEntry>               sQuestPackageItemStore("QuestPackageItem.db2", QuestPackageItemLoadInfo::Instance());
 DB2Storage<QuestSortEntry>                      sQuestSortStore("QuestSort.db2", QuestSortLoadInfo::Instance());
@@ -264,6 +271,7 @@ DB2Storage<SpellFocusObjectEntry>               sSpellFocusObjectStore("SpellFoc
 DB2Storage<SpellInterruptsEntry>                sSpellInterruptsStore("SpellInterrupts.db2", SpellInterruptsLoadInfo::Instance());
 DB2Storage<SpellItemEnchantmentEntry>           sSpellItemEnchantmentStore("SpellItemEnchantment.db2", SpellItemEnchantmentLoadInfo::Instance());
 DB2Storage<SpellItemEnchantmentConditionEntry>  sSpellItemEnchantmentConditionStore("SpellItemEnchantmentCondition.db2", SpellItemEnchantmentConditionLoadInfo::Instance());
+DB2Storage<SpellLabelEntry>                     sSpellLabelStore("SpellLabel.db2", SpellLabelLoadInfo::Instance());
 DB2Storage<SpellLearnSpellEntry>                sSpellLearnSpellStore("SpellLearnSpell.db2", SpellLearnSpellLoadInfo::Instance());
 DB2Storage<SpellLevelsEntry>                    sSpellLevelsStore("SpellLevels.db2", SpellLevelsLoadInfo::Instance());
 DB2Storage<SpellMiscEntry>                      sSpellMiscStore("SpellMisc.db2", SpellMiscLoadInfo::Instance());
@@ -410,6 +418,7 @@ namespace
     std::unordered_map<std::pair<uint32 /*level*/, int32 /*expansion*/>, ExpectedStatEntry const*> _expectedStatsByLevel;
     std::unordered_map<uint32 /*contentTuningId*/, std::vector<ExpectedStatModEntry const*>> _expectedStatModsByContentTuning;
     FactionTeamContainer _factionTeams;
+    std::unordered_map<uint32, std::set<FriendshipRepReactionEntry const*, DB2Manager::FriendshipRepReactionEntryComparator>> _friendshipRepReactions;
     HeirloomItemsContainer _heirlooms;
     GlyphBindableSpellsContainer _glyphBindableSpells;
     GlyphRequiredSpecsContainer _glyphRequiredSpecs;
@@ -432,10 +441,12 @@ namespace
     MountDisplaysCointainer _mountDisplays;
     NameGenContainer _nameGenData;
     NameValidationRegexContainer _nameValidators;
+    std::unordered_map<uint32, ParagonReputationEntry const*> _paragonReputations;
     PhaseGroupContainer _phasesByGroup;
     PowerTypesContainer _powerTypes;
     std::unordered_map<uint32, uint8> _pvpItemBonus;
     PvpTalentSlotUnlockEntry const* _pvpTalentSlotUnlock[MAX_PVP_TALENT_SLOTS];
+    std::unordered_map<uint32, std::unordered_set<QuestLineXQuestEntry const*>> _questsByQuestLine;
     QuestPackageItemContainer _questPackages;
     std::unordered_map<uint32, std::vector<RewardPackXCurrencyTypeEntry const*>> _rewardPackCurrencyTypes;
     std::unordered_map<uint32, std::vector<RewardPackXItemEntry const*>> _rewardPackItems;
@@ -581,6 +592,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
 #define LOAD_DB2(store) LoadDB2(availableDb2Locales, loadErrors, _stores, &store, db2Path, defaultLocale, GetCppRecordSize(store))
 
     LOAD_DB2(sAchievementStore);
+    LOAD_DB2(sAchievementCategoryStore);
     LOAD_DB2(sAdventureJournalStore);
     LOAD_DB2(sAdventureMapPOIStore);
     LOAD_DB2(sAnimationDataStore);
@@ -667,6 +679,8 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sExpectedStatModStore);
     LOAD_DB2(sFactionStore);
     LOAD_DB2(sFactionTemplateStore);
+    LOAD_DB2(sFriendshipRepReactionStore);
+    LOAD_DB2(sFriendshipReputationStore);
     LOAD_DB2(sGameObjectsStore);
     LOAD_DB2(sGameObjectDisplayInfoStore);
     LOAD_DB2(sGarrAbilityStore);
@@ -721,6 +735,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sItemLimitCategoryStore);
     LOAD_DB2(sItemLimitCategoryConditionStore);
     LOAD_DB2(sItemModifiedAppearanceStore);
+    LOAD_DB2(sItemModifiedAppearanceExtraStore);
     LOAD_DB2(sItemNameDescriptionStore);
     LOAD_DB2(sItemPriceBaseStore);
     LOAD_DB2(sItemSearchNameStore);
@@ -753,6 +768,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sNamesReservedLocaleStore);
     LOAD_DB2(sNumTalentsAtLevelStore);
     LOAD_DB2(sOverrideSpellDataStore);
+    LOAD_DB2(sParagonReputationStore);
     LOAD_DB2(sPhaseStore);
     LOAD_DB2(sPhaseXPhaseGroupStore);
     LOAD_DB2(sPlayerConditionStore);
@@ -764,8 +780,10 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sPvpTalentStore);
     LOAD_DB2(sPvpTalentCategoryStore);
     LOAD_DB2(sPvpTalentSlotUnlockStore);
+    LOAD_DB2(sPvpTierStore);
     LOAD_DB2(sQuestFactionRewardStore);
     LOAD_DB2(sQuestInfoStore);
+    LOAD_DB2(sQuestLineXQuestStore);
     LOAD_DB2(sQuestMoneyRewardStore);
     LOAD_DB2(sQuestPackageItemStore);
     LOAD_DB2(sQuestSortStore);
@@ -802,6 +820,7 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
     LOAD_DB2(sSpellInterruptsStore);
     LOAD_DB2(sSpellItemEnchantmentStore);
     LOAD_DB2(sSpellItemEnchantmentConditionStore);
+    LOAD_DB2(sSpellLabelStore);
     LOAD_DB2(sSpellLearnSpellStore);
     LOAD_DB2(sSpellLevelsStore);
     LOAD_DB2(sSpellMiscStore);
@@ -1075,6 +1094,9 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
         if (faction->ParentFactionID)
             _factionTeams[faction->ParentFactionID].push_back(faction->ID);
 
+    for (FriendshipRepReactionEntry const* friendshipRepReaction : sFriendshipRepReactionStore)
+        _friendshipRepReactions[friendshipRepReaction->FriendshipRepID].insert(friendshipRepReaction);
+
     for (GameObjectDisplayInfoEntry const* gameObjectDisplayInfo : sGameObjectDisplayInfoStore)
     {
         if (gameObjectDisplayInfo->GeoBoxMax.X < gameObjectDisplayInfo->GeoBoxMin.X)
@@ -1214,6 +1236,10 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
         }
     }
 
+    for (ParagonReputationEntry const* paragonReputation : sParagonReputationStore)
+        if (sFactionStore.HasRecord(paragonReputation->FactionID))
+            _paragonReputations[paragonReputation->FactionID] = paragonReputation;
+
     for (PhaseXPhaseGroupEntry const* group : sPhaseXPhaseGroupStore)
         if (PhaseEntry const* phase = sPhaseStore.LookupEntry(group->PhaseID))
             _phasesByGroup[group->PhaseGroupID].push_back(phase->ID);
@@ -1246,6 +1272,9 @@ uint32 DB2Manager::LoadStores(std::string const& dataPath, LocaleConstant defaul
             }
         }
     }
+
+    for (QuestLineXQuestEntry const* questLineQuest : sQuestLineXQuestStore)
+        _questsByQuestLine[questLineQuest->QuestLineID].insert(questLineQuest);
 
     for (QuestPackageItemEntry const* questPackageItem : sQuestPackageItemStore)
     {
@@ -2217,6 +2246,11 @@ std::vector<uint32> const* DB2Manager::GetFactionTeamList(uint32 faction) const
     return Trinity::Containers::MapGetValuePtr(_factionTeams, faction);
 }
 
+DB2Manager::FriendshipRepReactionSet const* DB2Manager::GetFriendshipRepReactions(uint32 friendshipRepID) const
+{
+    return Trinity::Containers::MapGetValuePtr(_friendshipRepReactions, friendshipRepID);
+}
+
 uint32 DB2Manager::GetGlobalCurveId(GlobalCurve globalCurveType) const
 {
     for (GlobalCurveEntry const* globalCurveEntry : sGlobalCurveStore)
@@ -2356,6 +2390,17 @@ std::set<uint32> DB2Manager::GetDefaultItemBonusTree(uint32 itemId, ItemContext 
         }
     }
 
+    return bonusListIDs;
+}
+
+std::set<uint32> DB2Manager::GetAllItemBonusTreeBonuses(uint32 itemBonusTreeId) const
+{
+    std::set<uint32> bonusListIDs;
+    VisitItemBonusTree(itemBonusTreeId, true, [&bonusListIDs](ItemBonusTreeNodeEntry const* bonusTreeNode)
+    {
+        if (bonusTreeNode->ChildItemBonusListID)
+            bonusListIDs.insert(bonusTreeNode->ChildItemBonusListID);
+    });
     return bonusListIDs;
 }
 
@@ -2633,6 +2678,11 @@ int32 DB2Manager::GetNumTalentsAtLevel(uint32 level, Classes playerClass)
     return 0;
 }
 
+ParagonReputationEntry const* DB2Manager::GetParagonReputation(uint32 factionId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_paragonReputations, factionId);
+}
+
 PVPDifficultyEntry const* DB2Manager::GetBattlegroundBracketByLevel(uint32 mapid, uint32 level)
 {
     PVPDifficultyEntry const* maxEntry = nullptr;           // used for level > max listed level case
@@ -2691,6 +2741,11 @@ int32 DB2Manager::GetPvpTalentNumSlotsAtLevel(uint32 level, Classes class_) cons
             ++slots;
 
     return slots;
+}
+
+std::unordered_set<QuestLineXQuestEntry const*> const* DB2Manager::GetQuestsForQuestLine(uint32 questLineId) const
+{
+    return Trinity::Containers::MapGetValuePtr(_questsByQuestLine, questLineId);
 }
 
 std::vector<QuestPackageItemEntry const*> const* DB2Manager::GetQuestPackageItems(uint32 questPackageID) const
@@ -3218,6 +3273,11 @@ bool ChrClassesXPowerTypesEntryComparator::Compare(ChrClassesXPowerTypesEntry co
 bool ItemLevelSelectorQualityEntryComparator::Compare(ItemLevelSelectorQualityEntry const* left, ItemLevelSelectorQualityEntry const* right)
 {
     return left->Quality < right->Quality;
+}
+
+bool DB2Manager::FriendshipRepReactionEntryComparator::Compare(FriendshipRepReactionEntry const* left, FriendshipRepReactionEntry const* right)
+{
+    return left->ReactionThreshold < right->ReactionThreshold;
 }
 
 bool DB2Manager::MountTypeXCapabilityEntryComparator::Compare(MountTypeXCapabilityEntry const* left, MountTypeXCapabilityEntry const* right)

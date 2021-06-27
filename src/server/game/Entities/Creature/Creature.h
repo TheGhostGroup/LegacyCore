@@ -152,7 +152,7 @@ class TC_GAME_API Creature : public Unit, public GridObject<Creature>, public Ma
 
         CreatureAI* AI() const { return reinterpret_cast<CreatureAI*>(i_AI); }
 
-        SpellSchoolMask GetMeleeDamageSchoolMask() const override { return m_meleeDamageSchoolMask; }
+        SpellSchoolMask GetMeleeDamageSchoolMask(WeaponAttackType /*attackType*/ = BASE_ATTACK) const override { return m_meleeDamageSchoolMask; }
         void SetMeleeDamageSchool(SpellSchools school) { m_meleeDamageSchoolMask = SpellSchoolMask(1 << school); }
 
         bool HasSpell(uint32 spellID) const override;
@@ -274,8 +274,6 @@ class TC_GAME_API Creature : public Unit, public GridObject<Creature>, public Ma
         ObjectGuid lootingGroupLowGUID;                     // used to find group which is looting corpse
 
         void SendZoneUnderAttackMessage(Player* attacker);
-
-        void SetInCombatWithZone();
 
         bool hasQuest(uint32 quest_id) const override;
         bool hasInvolvedQuest(uint32 quest_id)  const override;

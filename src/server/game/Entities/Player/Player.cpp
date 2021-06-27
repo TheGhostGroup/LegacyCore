@@ -648,7 +648,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
         case DAMAGE_SLIME:
         {
             DamageInfo dmgInfo(this, this, damage, nullptr, type == DAMAGE_LAVA ? SPELL_SCHOOL_MASK_FIRE : SPELL_SCHOOL_MASK_NATURE, DIRECT_DAMAGE, BASE_ATTACK);
-            CalcAbsorbResist(dmgInfo);
+            Unit::CalcAbsorbResist(dmgInfo);
             absorb = dmgInfo.GetAbsorb();
             resist = dmgInfo.GetResist();
             damage = dmgInfo.GetDamage();
@@ -658,7 +658,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
             break;
     }
 
-    DealDamageMods(this, damage, &absorb);
+    Unit::DealDamageMods(nullptr, this, damage, &absorb);
 
     WorldPackets::CombatLog::EnvironmentalDamageLog packet;
     packet.Victim = GetGUID();
@@ -667,7 +667,7 @@ uint32 Player::EnvironmentalDamage(EnviromentalDamage type, uint32 damage)
     packet.Absorbed = absorb;
     packet.Resisted = resist;
 
-    uint32 final_damage = DealDamage(this, damage, nullptr, SELF_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+    uint32 final_damage = Unit::DealDamage(this, this, damage, nullptr, SELF_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
 
     packet.LogData.Initialize(this);
     SendCombatLogMessage(&packet);
@@ -1264,7 +1264,7 @@ void Player::setDeathState(DeathState s)
         UpdateCriteria(CRITERIA_TYPE_DEATH_IN_DUNGEON, 1);
 
         // reset all death criterias
-        ResetCriteria(CRITERIA_CONDITION_NO_DEATH, 0);
+        ResetCriteria(CriteriaFailEvent::Death, 0);
     }
 
     Unit::setDeathState(s);
@@ -6271,6 +6271,12 @@ ReputationRank Player::GetReputationRank(uint32 faction) const
 // Calculate total reputation percent player gain with quest/creature level
 int32 Player::CalculateReputationGain(ReputationSource source, uint32 creatureOrQuestLevel, int32 rep, int32 faction, bool noQuestBonus)
 {
+    bool noBonuses = false;
+    if (FactionEntry const* factionEntry = sFactionStore.LookupEntry(faction))
+        if (FriendshipReputationEntry const* friendshipReputation = sFriendshipReputationStore.LookupEntry(factionEntry->FriendshipRepID))
+            if (friendshipReputation->GetFlags().HasFlag(FriendshipReputationFlags::NoRepGainModifiers))
+                noBonuses = true;
+
     float percent = 100.0f;
 
     float repMod = noQuestBonus ? 0.0f : float(GetTotalAuraModifier(SPELL_AURA_MOD_REPUTATION_GAIN));
@@ -7190,6 +7196,7 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
 {
     if (!IsInWorld())
         return;
+
     uint32 const oldZone = m_zoneUpdateId;
     m_zoneUpdateId = newZone;
     m_zoneUpdateTimer = ZONE_UPDATE_INTERVAL;
@@ -7199,8 +7206,8 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea)
     // call leave script hooks immedately (before updating flags)
     if (oldZone != newZone)
     {
-        sOutdoorPvPMgr->HandlePlayerLeaveZone(this, m_zoneUpdateId);
-        sBattlefieldMgr->HandlePlayerLeaveZone(this, m_zoneUpdateId);
+        sOutdoorPvPMgr->HandlePlayerLeaveZone(this, oldZone);
+        sBattlefieldMgr->HandlePlayerLeaveZone(this, oldZone);
     }
 
     // group update
@@ -7763,7 +7770,7 @@ void Player::_ApplyItemBonuses(Item* item, uint8 slot, bool apply)
             SetUpdateFieldValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::ShieldBlock), apply ? int32(armor * 2.5f) : 0);
     }
 
-    WeaponAttackType attType = GetAttackBySlot(slot, proto->GetInventoryType());
+    WeaponAttackType attType = Player::GetAttackBySlot(slot, proto->GetInventoryType());
     if (attType != MAX_ATTACK && CanUseAttackType(attType))
         _ApplyWeaponDamage(slot, item, apply);
 }
@@ -7771,14 +7778,11 @@ void Player::_ApplyItemBonuses(Item* item, uint8 slot, bool apply)
 void Player::_ApplyWeaponDamage(uint8 slot, Item* item, bool apply)
 {
     ItemTemplate const* proto = item->GetTemplate();
-    WeaponAttackType attType = BASE_ATTACK;
+    WeaponAttackType attType = Player::GetAttackBySlot(slot, proto->GetInventoryType());
+    if (attType == MAX_ATTACK)
+        return;
+
     float damage = 0.0f;
-
-    if (slot == EQUIPMENT_SLOT_MAINHAND && (proto->GetInventoryType() == INVTYPE_RANGED || proto->GetInventoryType() == INVTYPE_RANGEDRIGHT))
-        attType = RANGED_ATTACK;
-    else if (slot == EQUIPMENT_SLOT_OFFHAND)
-        attType = OFF_ATTACK;
-
     uint32 itemLevel = item->GetItemLevel(this);
     float minDamage, maxDamage;
     proto->GetDamage(itemLevel, minDamage, maxDamage);
@@ -7817,6 +7821,14 @@ void Player::_ApplyWeaponDamage(uint8 slot, Item* item, bool apply)
 
     if (CanModifyStats() && (damage || proto->GetDelay()))
         UpdateDamagePhysical(attType);
+}
+
+SpellSchoolMask Player::GetMeleeDamageSchoolMask(WeaponAttackType attackType /*= BASE_ATTACK*/) const
+{
+    if (Item const* weapon = GetWeaponForAttack(attackType, true))
+        return SpellSchoolMask(1 << weapon->GetTemplate()->GetDamageType());
+
+    return SPELL_SCHOOL_MASK_NORMAL;
 }
 
 void Player::CastAllObtainSpells()
@@ -8175,7 +8187,11 @@ void Player::ApplyAzeriteEssence(AzeriteItem* item, uint32 azeriteEssenceId, uin
             if (major && currentRank == 1)
             {
                 if (apply)
-                    CastSpell(this, SPELL_ID_HEART_ESSENCE_ACTION_BAR_OVERRIDE, CastSpellExtraArgs(TRIGGERED_FULL_MASK).AddSpellBP0(azeriteEssencePower->MajorPowerDescription));
+                {
+                    CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
+                    args.AddSpellMod(SPELLVALUE_BASE_POINT0, azeriteEssencePower->MajorPowerDescription);
+                    CastSpell(this, SPELL_ID_HEART_ESSENCE_ACTION_BAR_OVERRIDE, args);
+                }
                 else
                     RemoveAurasDueToSpell(SPELL_ID_HEART_ESSENCE_ACTION_BAR_OVERRIDE);
             }
@@ -8397,7 +8413,7 @@ void Player::CastItemCombatSpell(DamageInfo const& damageInfo, Item* item, ItemT
                     for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
                     {
                         if (spellInfo->GetEffect(i)->IsEffect())
-                            args.SpellValueOverrides.AddMod(static_cast<SpellValueMod>(SPELLVALUE_BASE_POINT0 + i), CalculatePct(spellInfo->GetEffect(i)->CalcValue(this), effectPct));
+                            args.AddSpellMod(static_cast<SpellValueMod>(SPELLVALUE_BASE_POINT0 + i), CalculatePct(spellInfo->GetEffect(i)->CalcValue(this), effectPct));
                     }
                 }
                 CastSpell(target, spellInfo->Id, args);
@@ -9961,6 +9977,50 @@ uint8 Player::FindEquipSlot(Item const* item, uint32 slot, bool swap) const
 
     // no free position
     return NULL_SLOT;
+}
+
+uint32 Player::GetFreeInventorySlotCount(EnumFlag<ItemSearchLocation> location /*= ItemSearchLocation::Inventory*/) const
+{
+    uint32 freeSlotCount = 0;
+
+    if (location.HasFlag(ItemSearchLocation::Equipment))
+        for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
+            if (!GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                ++freeSlotCount;
+
+    if (location.HasFlag(ItemSearchLocation::Inventory))
+    {
+        uint8 inventoryEnd = INVENTORY_SLOT_ITEM_START + GetInventorySlotCount();
+        for (uint8 i = INVENTORY_SLOT_BAG_START; i < inventoryEnd; ++i)
+            if (!GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                ++freeSlotCount;
+
+        for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+            if (Bag* bag = GetBagByPos(i))
+                for (uint32 j = 0; j < GetBagSize(bag); ++j)
+                    if (!GetItemInBag(bag, j))
+                        ++freeSlotCount;
+    }
+
+    if (location.HasFlag(ItemSearchLocation::Bank))
+    {
+        for (uint8 i = BANK_SLOT_ITEM_START; i < BANK_SLOT_BAG_END; ++i)
+            if (!GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                ++freeSlotCount;
+
+        for (uint8 i = BANK_SLOT_BAG_START; i < BANK_SLOT_BAG_END; ++i)
+            if (Bag* bag = GetBagByPos(i))
+                for (uint32 j = 0; j < GetBagSize(bag); ++j)
+                    if (!GetItemInBag(bag, j))
+                        ++freeSlotCount;
+    }
+
+    if (location.HasFlag(ItemSearchLocation::ReagentBank))
+        for (uint8 i = REAGENT_SLOT_START; i < REAGENT_SLOT_END; ++i)
+            if (!GetItemByPos(INVENTORY_SLOT_BAG_0, i))
+                ++freeSlotCount;
+
+    return freeSlotCount;
 }
 
 InventoryResult Player::CanUnequipItems(uint32 item, uint32 count) const
@@ -15308,12 +15368,10 @@ void Player::AddQuest(Quest const* quest, Object* questGiver)
     QuestStatus oldStatus = questStatusData.Status;
 
     // check for repeatable quests status reset
+    SetQuestSlot(log_slot, quest_id);
     questStatusData.Slot = log_slot;
     questStatusData.Status = QUEST_STATUS_INCOMPLETE;
     questStatusData.Explored = false;
-
-    GiveQuestSourceItem(quest);
-    AdjustQuestObjectiveProgress(quest);
 
     for (QuestObjective const& obj : quest->GetObjectives())
     {
@@ -15332,6 +15390,9 @@ void Player::AddQuest(Quest const* quest, Object* questGiver)
                 break;
         }
     }
+
+    GiveQuestSourceItem(quest);
+    AdjustQuestObjectiveProgress(quest);
 
     time_t endTime = 0;
     if (uint32 limittime = quest->GetLimitTime())
@@ -15364,13 +15425,12 @@ void Player::AddQuest(Quest const* quest, Object* questGiver)
         caster->CastSpell(this, spellInfo->Id, CastSpellExtraArgs(TRIGGERED_FULL_MASK).SetCastDifficulty(spellInfo->Difficulty));
     }
 
-    SetQuestSlot(log_slot, quest_id);
     SetQuestSlotEndTime(log_slot, endTime);
     SetQuestSlotAcceptTime(log_slot, GameTime::GetGameTime());
 
     m_QuestStatusSave[quest_id] = QUEST_DEFAULT_SAVE_TYPE;
 
-    StartCriteriaTimer(CRITERIA_TIMED_TYPE_QUEST, quest_id);
+    StartCriteriaTimer(CriteriaStartEvent::AcceptQuest, quest_id);
 
     SendQuestUpdate(quest_id);
 
@@ -15397,9 +15457,8 @@ void Player::CompleteQuest(uint32 quest_id)
     {
         SetQuestStatus(quest_id, QUEST_STATUS_COMPLETE);
 
-        uint16 log_slot = FindQuestSlot(quest_id);
-        if (log_slot < MAX_QUEST_LOG_SIZE)
-            SetQuestSlotState(log_slot, QUEST_STATE_COMPLETE);
+        if (QuestStatusData const* questStatus = Trinity::Containers::MapGetValuePtr(m_QuestStatus, quest_id))
+            SetQuestSlotState(questStatus->Slot, QUEST_STATE_COMPLETE);
 
         if (Quest const* qInfo = sObjectMgr->GetQuestTemplate(quest_id))
             if (qInfo->HasFlag(QUEST_FLAGS_TRACKING))
@@ -16808,7 +16867,7 @@ void Player::KilledMonsterCredit(uint32 entry, ObjectGuid guid /*= ObjectGuid::E
             real_entry = killed->GetEntry();
     }
 
-    StartCriteriaTimer(CRITERIA_TIMED_TYPE_CREATURE, real_entry);   // MUST BE CALLED FIRST
+    StartCriteriaTimer(CriteriaStartEvent::KillNPC, real_entry);   // MUST BE CALLED FIRST
     UpdateCriteria(CRITERIA_TYPE_KILL_CREATURE, real_entry, addKillCount, 0, killed);
 
     UpdateQuestObjectiveProgress(QUEST_OBJECTIVE_MONSTER, entry, 1, guid);
@@ -22173,6 +22232,10 @@ bool Player::IsAffectedBySpellmod(SpellInfo const* spellInfo, SpellModifier* mod
     if (mod->op == SpellModOp::Duration && spellInfo->GetDuration() == -1)
         return false;
 
+    // mod crit to spells that can't crit
+    if (mod->op == SpellModOp::CritChance && !spellInfo->HasAttribute(SPELL_ATTR0_CU_CAN_CRIT))
+        return false;
+
     return spellInfo->IsAffectedBySpellMod(mod);
 }
 
@@ -23220,19 +23283,13 @@ bool Player::BuyItemFromVendorSlot(ObjectGuid vendorguid, uint32 vendorslot, uin
 uint32 Player::GetMaxPersonalArenaRatingRequirement(uint32 minarenaslot) const
 {
     // returns the maximal personal arena rating that can be used to purchase items requiring this condition
-    // the personal rating of the arena team must match the required limit as well
-    // so return max[in arenateams](min(personalrating[teamtype], teamrating[teamtype]))
+    // so return max[in arenateams](personalrating[teamtype])
     uint32 max_personal_rating = 0;
     for (uint8 i = minarenaslot; i < MAX_ARENA_SLOT; ++i)
     {
-        if (ArenaTeam* at = sArenaTeamMgr->GetArenaTeamById(GetArenaTeamId(i)))
-        {
-            uint32 p_rating = GetArenaPersonalRating(i);
-            uint32 t_rating = at->GetRating();
-            p_rating = p_rating < t_rating ? p_rating : t_rating;
-            if (max_personal_rating < p_rating)
-                max_personal_rating = p_rating;
-        }
+        uint32 p_rating = GetArenaPersonalRating(i);
+        if (max_personal_rating < p_rating)
+            max_personal_rating = p_rating;
     }
     return max_personal_rating;
 }
@@ -23652,6 +23709,7 @@ void Player::ReportedAfkBy(Player* reporter)
 WorldLocation Player::GetStartPosition() const
 {
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
+    ASSERT(info);
     uint32 mapId = info->mapId;
     if (getClass() == CLASS_DEATH_KNIGHT && HasSpell(50977))
         mapId = 0;
@@ -24431,6 +24489,7 @@ void Player::LearnCustomSpells()
 
     // learn default race/class spells
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
+    ASSERT(info);
     for (PlayerCreateInfoSpells::const_iterator itr = info->customSpells.begin(); itr != info->customSpells.end(); ++itr)
     {
         uint32 tspell = *itr;
@@ -24447,6 +24506,7 @@ void Player::LearnDefaultSkills()
 {
     // learn default race/class skills
     PlayerInfo const* info = sObjectMgr->GetPlayerInfo(getRace(), getClass());
+    ASSERT(info);
     for (PlayerCreateInfoSkills::const_iterator itr = info->skills.begin(); itr != info->skills.end(); ++itr)
     {
         SkillRaceClassInfoEntry const* rcInfo = *itr;
@@ -25218,16 +25278,27 @@ bool Player::HasItemFitToSpellRequirements(SpellInfo const* spellInfo, Item cons
         {
             if (!spellInfo->HasAttribute(SPELL_ATTR8_ARMOR_SPECIALIZATION))
             {
+                // most used check: shield only
+                if (spellInfo->EquippedItemSubClassMask & (1 << ITEM_SUBCLASS_ARMOR_SHIELD))
+                {
+                    if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
+                        if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
+                            return true;
+
+                    // special check to filter things like Shield Wall, the aura is not permanent and must stay even without required item
+                    if (!spellInfo->IsPassive())
+                    {
+                        for (SpellEffectInfo const* effect : spellInfo->GetEffects())
+                            if (effect && effect->IsAura())
+                                return true;
+                    }
+                }
+
                 // tabard not have dependent spells
                 for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_MAINHAND; ++i)
                     if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, i))
                         if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
                             return true;
-
-                // shields can be equipped to offhand slot
-                if (Item* item = GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
-                    if (item != ignoreItem && item->IsFitToSpellRequirements(spellInfo))
-                        return true;
             }
             else
             {
@@ -25241,7 +25312,6 @@ bool Player::HasItemFitToSpellRequirements(SpellInfo const* spellInfo, Item cons
 
                 return true;
             }
-
             break;
         }
         default:
@@ -25503,8 +25573,13 @@ void Player::SetClientControl(Unit* target, bool allowMove)
 void Player::SetMover(Unit* target)
 {
     m_unitMovedByMe->m_playerMovingMe = nullptr;
+    if (m_unitMovedByMe->GetTypeId() == TYPEID_UNIT)
+        m_unitMovedByMe->GetMotionMaster()->Initialize();
+
     m_unitMovedByMe = target;
     m_unitMovedByMe->m_playerMovingMe = this;
+    if (m_unitMovedByMe->GetTypeId() == TYPEID_UNIT)
+        m_unitMovedByMe->GetMotionMaster()->Initialize();
 
     WorldPackets::Movement::MoveSetActiveMover packet;
     packet.MoverGUID = target->GetGUID();
@@ -25794,7 +25869,7 @@ void Player::ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidDat
     if (status && liquidData)
     {
         // Breath bar state (under water in any liquid type)
-        if (liquidData->type_flags & MAP_ALL_LIQUIDS)
+        if (liquidData->type_flags.HasFlag(map_liquidHeaderTypeFlags::AllLiquids))
         {
             if (status & LIQUID_MAP_UNDER_WATER)
                 m_MirrorTimerFlags |= UNDERWATER_INWATER;
@@ -25803,13 +25878,13 @@ void Player::ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidDat
         }
 
         // Fatigue bar state (if not on flight path or transport)
-        if ((liquidData->type_flags & MAP_LIQUID_TYPE_DARK_WATER) && !IsInFlight() && !GetTransport())
+        if (liquidData->type_flags.HasFlag(map_liquidHeaderTypeFlags::DarkWater) && !IsInFlight() && !GetTransport())
             m_MirrorTimerFlags |= UNDERWATER_INDARKWATER;
         else
             m_MirrorTimerFlags &= ~UNDERWATER_INDARKWATER;
 
         // Lava state (any contact)
-        if (liquidData->type_flags & MAP_LIQUID_TYPE_MAGMA)
+        if (liquidData->type_flags.HasFlag(map_liquidHeaderTypeFlags::Magma))
         {
             if (status & MAP_LIQUID_STATUS_IN_CONTACT)
                 m_MirrorTimerFlags |= UNDERWATER_INLAVA;
@@ -25818,7 +25893,7 @@ void Player::ProcessTerrainStatusUpdate(ZLiquidStatus status, Optional<LiquidDat
         }
 
         // Slime state (any contact)
-        if (liquidData->type_flags & MAP_LIQUID_TYPE_SLIME)
+        if (liquidData->type_flags.HasFlag(map_liquidHeaderTypeFlags::Slime))
         {
             if (status & MAP_LIQUID_STATUS_IN_CONTACT)
                 m_MirrorTimerFlags |= UNDERWATER_INSLIME;
@@ -26508,22 +26583,27 @@ uint32 Player::GetAchievementPoints() const
     return m_achievementMgr->GetAchievementPoints();
 }
 
+std::vector<uint32> Player::GetCompletedAchievementIds() const
+{
+    return m_achievementMgr->GetCompletedAchievementIds();
+}
+
 bool Player::HasAchieved(uint32 achievementId) const
 {
     return m_achievementMgr->HasAchieved(achievementId);
 }
 
-void Player::StartCriteriaTimer(CriteriaTimedTypes type, uint32 entry, uint32 timeLost/* = 0*/)
+void Player::StartCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry, uint32 timeLost/* = 0*/)
 {
-    m_achievementMgr->StartCriteriaTimer(type, entry, timeLost);
+    m_achievementMgr->StartCriteriaTimer(startEvent, entry, timeLost);
 }
 
-void Player::RemoveCriteriaTimer(CriteriaTimedTypes type, uint32 entry)
+void Player::RemoveCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry)
 {
-    m_achievementMgr->RemoveCriteriaTimer(type, entry);
+    m_achievementMgr->RemoveCriteriaTimer(startEvent, entry);
 }
 
-void Player::ResetCriteria(CriteriaCondition condition, int32 failAsset, bool evenIfCriteriaComplete /* = false*/)
+void Player::ResetCriteria(CriteriaFailEvent condition, int32 failAsset, bool evenIfCriteriaComplete /* = false*/)
 {
     m_achievementMgr->ResetCriteria(condition, failAsset, evenIfCriteriaComplete);
     m_questObjectiveCriteriaMgr->ResetCriteria(condition, failAsset, evenIfCriteriaComplete);
@@ -28161,6 +28241,27 @@ bool Player::MeetPlayerCondition(uint32 conditionId) const
     return true;
 }
 
+bool Player::IsInFriendlyArea() const
+{
+    if (AreaTableEntry const* areaEntry = sAreaTableStore.LookupEntry(GetAreaId()))
+        return IsFriendlyArea(areaEntry);
+    return false;
+}
+
+bool Player::IsFriendlyArea(AreaTableEntry const* areaEntry) const
+{
+    ASSERT(areaEntry != nullptr);
+
+    FactionTemplateEntry const* factionTemplate = GetFactionTemplateEntry();
+    if (!factionTemplate)
+        return false;
+
+    if (!(factionTemplate->FriendGroup & areaEntry->FactionGroupMask))
+        return false;
+
+    return true;
+}
+
 std::string Player::GetMapAreaAndZoneString() const
 {
     uint32 areaId = GetAreaId();
@@ -28739,4 +28840,13 @@ void Player::UpdateAverageItemLevelEquipped()
 
     totalItemLevel /= 16.0;
     SetAverageItemLevelEquipped(totalItemLevel);
+}
+
+bool Player::CanEnableWarModeInArea() const
+{
+    AreaTableEntry const* area = sAreaTableStore.LookupEntry(GetAreaId());
+    if (!area || !IsFriendlyArea(area))
+        return false;
+
+    return area->Flags[1] & AREA_FLAG_2_CAN_ENABLE_WAR_MODE;
 }

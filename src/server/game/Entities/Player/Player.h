@@ -435,7 +435,7 @@ enum PlayerFlags
     PLAYER_FLAGS_PLAYED_TOO_LONG        = 0x00002000,       // played too long time
     PLAYER_FLAGS_IS_OUT_OF_BOUNDS       = 0x00004000,
     PLAYER_FLAGS_DEVELOPER              = 0x00008000,       // <Dev> prefix for something?
-    PLAYER_FLAGS_UNK16                  = 0x00010000,       // pre-3.0.3 PLAYER_FLAGS_SANCTUARY flag for player entered sanctuary
+    PLAYER_FLAGS_LOW_LEVEL_RAID_ENABLED = 0x00010000,       // pre-3.0.3 PLAYER_FLAGS_SANCTUARY flag for player entered sanctuary
     PLAYER_FLAGS_TAXI_BENCHMARK         = 0x00020000,       // taxi benchmark mode (on/off) (2.0.1)
     PLAYER_FLAGS_PVP_TIMER              = 0x00040000,       // 3.0.2, pvp timer active (after you disable pvp manually)
     PLAYER_FLAGS_UBER                   = 0x00080000,
@@ -449,8 +449,8 @@ enum PlayerFlags
     PLAYER_FLAGS_AUTO_DECLINE_GUILD     = 0x08000000,       // Automatically declines guild invites
     PLAYER_FLAGS_GUILD_LEVEL_ENABLED    = 0x10000000,       // Lua_GetGuildLevelEnabled() - enables guild leveling related UI
     PLAYER_FLAGS_VOID_UNLOCKED          = 0x20000000,       // void storage
-    PLAYER_FLAGS_MENTOR                 = 0x40000000,
-    PLAYER_FLAGS_UNK31                  = 0x80000000
+    PLAYER_FLAGS_TIMEWALKING            = 0x40000000,
+    PLAYER_FLAGS_COMMENTATOR_CAMERA     = 0x80000000
 };
 
 enum PlayerFlagsEx
@@ -476,6 +476,7 @@ enum PlayerLocalFlags
     PLAYER_LOCAL_FLAG_USING_PARTY_GARRISON          = 0x00000100,
     PLAYER_LOCAL_FLAG_CAN_USE_OBJECTS_MOUNTED       = 0x00000200,
     PLAYER_LOCAL_FLAG_CAN_VISIT_PARTY_GARRISON      = 0x00000400,
+    PLAYER_LOCAL_FLAG_WAR_MODE                      = 0x00000800,
     PLAYER_LOCAL_FLAG_ACCOUNT_SECURED               = 0x00001000,   // Script_IsAccountSecured
     PLAYER_LOCAL_FLAG_OVERRIDE_TRANSPORT_SERVER_TIME= 0x00008000,
     PLAYER_LOCAL_FLAG_MENTOR_RESTRICTED             = 0x00020000,
@@ -503,14 +504,19 @@ enum MirrorTimerType
 enum PlayerExtraFlags
 {
     // gm abilities
-    PLAYER_EXTRA_GM_ON              = 0x0001,
-    PLAYER_EXTRA_ACCEPT_WHISPERS    = 0x0004,
-    PLAYER_EXTRA_TAXICHEAT          = 0x0008,
-    PLAYER_EXTRA_GM_INVISIBLE       = 0x0010,
-    PLAYER_EXTRA_GM_CHAT            = 0x0020,               // Show GM badge in chat messages
+    PLAYER_EXTRA_GM_ON                      = 0x0001,
+    PLAYER_EXTRA_ACCEPT_WHISPERS            = 0x0004,
+    PLAYER_EXTRA_TAXICHEAT                  = 0x0008,
+    PLAYER_EXTRA_GM_INVISIBLE               = 0x0010,
+    PLAYER_EXTRA_GM_CHAT                    = 0x0020,       // Show GM badge in chat messages
 
     // other states
-    PLAYER_EXTRA_PVP_DEATH          = 0x0100                // store PvP death status until corpse creating.
+    PLAYER_EXTRA_PVP_DEATH                  = 0x0100,       // store PvP death status until corpse creating.
+
+    // Character services markers
+    PLAYER_EXTRA_HAS_RACE_CHANGED           = 0x0200,
+    PLAYER_EXTRA_GRANTED_LEVELS_FROM_RAF    = 0x0400,
+    PLAYER_EXTRA_LEVEL_BOOSTED              = 0x0800,
 };
 
 // 2^n values
@@ -1129,6 +1135,12 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool isGMVisible() const { return !(m_ExtraFlags & PLAYER_EXTRA_GM_INVISIBLE); }
         void SetGMVisible(bool on);
         void SetPvPDeath(bool on) { if (on) m_ExtraFlags |= PLAYER_EXTRA_PVP_DEATH; else m_ExtraFlags &= ~PLAYER_EXTRA_PVP_DEATH; }
+        bool HasRaceChanged() const { return (m_ExtraFlags & PLAYER_EXTRA_HAS_RACE_CHANGED) != 0; }
+        void SetHasRaceChanged() { m_ExtraFlags |= PLAYER_EXTRA_HAS_RACE_CHANGED; }
+        bool HasBeenGrantedLevelsFromRaF() const { return (m_ExtraFlags & PLAYER_EXTRA_GRANTED_LEVELS_FROM_RAF) != 0; }
+        void SetBeenGrantedLevelsFromRaF() { m_ExtraFlags |= PLAYER_EXTRA_GRANTED_LEVELS_FROM_RAF; }
+        bool HasLevelBoosted() const { return (m_ExtraFlags & PLAYER_EXTRA_LEVEL_BOOSTED) != 0; }
+        void SetHasLevelBoosted() { m_ExtraFlags |= PLAYER_EXTRA_LEVEL_BOOSTED; }
 
         uint32 GetXP() const { return m_activePlayerData->XP; }
         uint32 GetXPForNextLevel() const { return m_activePlayerData->NextLevelXP; }
@@ -1248,6 +1260,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void UpdateAverageItemLevelEquipped();
 
         uint8 FindEquipSlot(Item const* item, uint32 slot, bool swap) const;
+        uint32 GetFreeInventorySlotCount(EnumFlag<ItemSearchLocation> location = ItemSearchLocation::Inventory) const;
         uint32 GetItemCount(uint32 item, bool inBankAlso = false, Item* skipItem = nullptr) const;
         uint32 GetItemCountWithLimitCategory(uint32 limitCategory, Item* skipItem = nullptr) const;
         Item* GetItemByGuid(ObjectGuid guid) const;
@@ -1947,6 +1960,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         uint32 GetBaseSpellPowerBonus() const { return m_baseSpellPower; }
         int32 GetSpellPenetrationItemMod() const { return m_spellPenetrationItemMod; }
 
+        bool CanApplyResilience() const override { return true; }
+
         float GetExpertiseDodgeOrParryReduction(WeaponAttackType attType) const;
         void UpdateBlockPercentage();
         void UpdateCritPercentage(WeaponAttackType attType);
@@ -2181,6 +2196,8 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         void _RemoveAllStatBonuses();
 
         void ResetAllPowers();
+
+        SpellSchoolMask GetMeleeDamageSchoolMask(WeaponAttackType attackType = BASE_ATTACK) const override;
 
         void CastAllObtainSpells();
         void ApplyItemObtainSpells(Item* item, bool apply);
@@ -2478,12 +2495,13 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         void SendRespondInspectAchievements(Player* player) const;
         uint32 GetAchievementPoints() const;
+        std::vector<uint32> GetCompletedAchievementIds() const;
         bool HasAchieved(uint32 achievementId) const;
         void ResetAchievements();
-        void ResetCriteria(CriteriaCondition condition, int32 failAsset, bool evenIfCriteriaComplete = false);
+        void ResetCriteria(CriteriaFailEvent condition, int32 failAsset, bool evenIfCriteriaComplete = false);
         void UpdateCriteria(CriteriaTypes type, uint64 miscValue1 = 0, uint64 miscValue2 = 0, uint64 miscValue3 = 0, Unit* unit = nullptr);
-        void StartCriteriaTimer(CriteriaTimedTypes type, uint32 entry, uint32 timeLost = 0);
-        void RemoveCriteriaTimer(CriteriaTimedTypes type, uint32 entry);
+        void StartCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry, uint32 timeLost = 0);
+        void RemoveCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry);
         void CompletedAchievement(AchievementEntry const* entry);
         bool ModifierTreeSatisfied(uint32 modifierTreeId) const;
 
@@ -2663,6 +2681,11 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
 
         void AddAuraVision(PlayerFieldByte2Flags flags) { SetUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::AuraVision), flags); }
         void RemoveAuraVision(PlayerFieldByte2Flags flags) { RemoveUpdateFieldFlagValue(m_values.ModifyValue(&Player::m_activePlayerData).ModifyValue(&UF::ActivePlayerData::AuraVision), flags); }
+
+        bool IsInFriendlyArea() const;
+        bool IsFriendlyArea(AreaTableEntry const* inArea) const;
+
+        bool CanEnableWarModeInArea() const;
 
         UF::UpdateField<UF::PlayerData, 0, TYPEID_PLAYER> m_playerData;
         UF::UpdateField<UF::ActivePlayerData, 0, TYPEID_ACTIVE_PLAYER> m_activePlayerData;

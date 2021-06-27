@@ -431,7 +431,7 @@ void WorldSession::HandleCharEnum(CharacterDatabaseQueryHolder* holder)
         while (result->NextRow());
     }
 
-    charEnum.IsAlliedRacesCreationAllowed = GetAccountExpansion() >= EXPANSION_BATTLE_FOR_AZEROTH;
+    charEnum.IsAlliedRacesCreationAllowed = CanAccessAlliedRaces();
 
     for (std::pair<uint8 const, RaceUnlockRequirement> const& requirement : sObjectMgr->GetRaceUnlockRequirements())
     {
@@ -2143,7 +2143,8 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
     {
         stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_CHAR_RACE);
         stmt->setUInt8(0, factionChangeInfo->RaceID);
-        stmt->setUInt64(1, lowGuid);
+        stmt->setUInt16(1, PLAYER_EXTRA_HAS_RACE_CHANGED);
+        stmt->setUInt64(2, lowGuid);
 
         trans->Append(stmt);
     }
@@ -2364,16 +2365,15 @@ void WorldSession::HandleCharRaceOrFactionChangeCallback(std::shared_ptr<WorldPa
 
             // Disable all old-faction specific quests
             {
-                ObjectMgr::QuestMap const& questTemplates = sObjectMgr->GetQuestTemplates();
-                for (ObjectMgr::QuestMap::const_iterator iter = questTemplates.begin(); iter != questTemplates.end(); ++iter)
+                ObjectMgr::QuestContainer const& questTemplates = sObjectMgr->GetQuestTemplates();
+                for (auto const& questTemplatePair : questTemplates)
                 {
-                    Quest const* quest = iter->second;
                     uint64 newRaceMask = (newTeamId == TEAM_ALLIANCE) ? RACEMASK_ALLIANCE : RACEMASK_HORDE;
-                    if (quest->GetAllowableRaces().RawValue != uint64(-1) && !(quest->GetAllowableRaces().RawValue & newRaceMask))
+                    if (questTemplatePair.second.GetAllowableRaces().RawValue != uint64(-1) && !(questTemplatePair.second.GetAllowableRaces().RawValue & newRaceMask))
                     {
                         stmt = CharacterDatabase.GetPreparedStatement(CHAR_UPD_CHAR_QUESTSTATUS_REWARDED_ACTIVE_BY_QUEST);
                         stmt->setUInt64(0, lowGuid);
-                        stmt->setUInt32(1, quest->GetQuestId());
+                        stmt->setUInt32(1, questTemplatePair.first);
                         trans->Append(stmt);
                     }
                 }

@@ -71,6 +71,16 @@ uint32 AchievementMgr::GetAchievementPoints() const
     return _achievementPoints;
 }
 
+std::vector<uint32> AchievementMgr::GetCompletedAchievementIds() const
+{
+    std::vector<uint32> achievementIds;
+    std::transform(_completedAchievements.begin(), _completedAchievements.end(), std::back_inserter(achievementIds), [](std::pair<uint32 const, CompletedAchievementData> const& achievement)
+    {
+        return achievement.first;
+    });
+    return achievementIds;
+}
+
 bool AchievementMgr::CanUpdateCriteriaTree(Criteria const* criteria, CriteriaTree const* tree, Player* referencePlayer) const
 {
     AchievementEntry const* achievement = tree->Achievement;
@@ -350,15 +360,15 @@ void PlayerAchievementMgr::SaveToDB(CharacterDatabaseTransaction& trans)
     }
 }
 
-void PlayerAchievementMgr::ResetCriteria(CriteriaCondition condition, int32 failAsset, bool evenIfCriteriaComplete)
+void PlayerAchievementMgr::ResetCriteria(CriteriaFailEvent failEvent, int32 failAsset, bool evenIfCriteriaComplete)
 {
-    TC_LOG_DEBUG("criteria.achievement", "PlayerAchievementMgr::ResetCriteria(%u, %d, %s)", condition, failAsset, evenIfCriteriaComplete ? "true" : "false");
+    TC_LOG_DEBUG("criteria.achievement", "PlayerAchievementMgr::ResetCriteria(%u, %d, %s)", uint32(failEvent), failAsset, evenIfCriteriaComplete ? "true" : "false");
 
     // disable for gamemasters with GM-mode enabled
     if (_owner->IsGameMaster())
         return;
 
-    if (CriteriaList const* achievementCriteriaList = sCriteriaMgr->GetCriteriaByFailEvent(condition, failAsset))
+    if (CriteriaList const* achievementCriteriaList = sCriteriaMgr->GetCriteriaByFailEvent(failEvent, failAsset))
     {
         for (Criteria const* achievementCriteria : *achievementCriteriaList)
         {

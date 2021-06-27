@@ -82,7 +82,7 @@ public:
                 if (me->IsWithinDistInMap(who, 20.0f))
                 {
                     Talk(SAY_BANISH);
-                    me->DealDamage(who, who->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+                    Unit::DealDamage(me, who, who->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
                 }
             }
 
@@ -106,10 +106,10 @@ public:
             if (!UpdateVictim())
                 return;
 
+            events.Update(diff);
+
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
-
-            events.Update(diff);
 
             while (uint32 eventId = events.ExecuteEvent())
             {

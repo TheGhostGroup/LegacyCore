@@ -261,10 +261,10 @@ struct boss_reliquary_of_souls : public BossAI
         if (!UpdateVictim())
             return;
 
+        events.Update(diff);
+
         if (me->HasUnitState(UNIT_STATE_CASTING))
             return;
-
-        events.Update(diff);
 
         while (uint32 eventId = events.ExecuteEvent())
         {
@@ -634,7 +634,7 @@ struct npc_enslaved_soul : public ScriptedAI
         _scheduler.Schedule(Seconds(3), [this](TaskContext /*context*/)
         {
             me->SetReactState(REACT_AGGRESSIVE);
-            me->SetInCombatWithZone();
+            DoZoneInCombat();
         });
     }
 

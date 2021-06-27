@@ -203,10 +203,19 @@ void AuraApplication::BuildUpdatePacket(WorldPackets::Spells::AuraInfo& auraInfo
 
     if (auraData.Flags & AFLAG_SCALABLE)
     {
-        auraData.Points.resize(aura->GetAuraEffects().size(), 0.0f);
+        auraData.Points.reserve(aura->GetAuraEffects().size());
+        auraData.EstimatedPoints.reserve(aura->GetAuraEffects().size());
         for (AuraEffect const* effect : GetBase()->GetAuraEffects())
+        {
             if (effect && HasEffect(effect->GetEffIndex()))       // Not all of aura's effects have to be applied on every target
-                auraData.Points[effect->GetEffIndex()] = float(effect->GetAmount());
+            {
+                Trinity::Containers::EnsureWritableVectorIndex(auraData.Points, effect->GetEffIndex()) = float(effect->GetAmount());
+                if (effect->GetEstimatedAmount())
+                    Trinity::Containers::EnsureWritableVectorIndex(auraData.EstimatedPoints, effect->GetEffIndex()) = *effect->GetEstimatedAmount();
+            }
+        }
+        if (!auraData.EstimatedPoints.empty())
+            auraData.EstimatedPoints.resize(auraData.Points.size()); // pad to equal sizes
     }
 }
 
@@ -916,13 +925,8 @@ void Aura::SetStackAmount(uint8 stackAmount)
             effect->ChangeAmount(effect->CalculateAmount(caster), false, true);
 
     for (std::list<AuraApplication*>::const_iterator apptItr = applications.begin(); apptItr != applications.end(); ++apptItr)
-    {
         if (!(*apptItr)->GetRemoveMode())
-        {
-            HandleAuraSpecificPeriodics(*apptItr, caster);
             HandleAuraSpecificMods(*apptItr, caster, true, true);
-        }
-    }
 
     SetNeedClientUpdateForTargets();
 }
@@ -1312,7 +1316,7 @@ void Aura::HandleAuraSpecificMods(AuraApplication const* aurApp, Unit* caster, b
                     if (caster->HasAura(64760))
                     {
                         CastSpellExtraArgs args(GetEffect(EFFECT_0));
-                        args.SpellValueOverrides.AddMod(SPELLVALUE_BASE_POINT0, GetEffect(EFFECT_0)->GetAmount());
+                        args.AddSpellMod(SPELLVALUE_BASE_POINT0, GetEffect(EFFECT_0)->GetAmount());
                         caster->CastSpell(target, 64801, args);
                     }
                 }
@@ -1365,7 +1369,7 @@ void Aura::HandleAuraSpecificMods(AuraApplication const* aurApp, Unit* caster, b
                         {
                             float multiplier = float(aurEff->GetAmount());
                             CastSpellExtraArgs args(TRIGGERED_FULL_MASK);
-                            args.SpellValueOverrides.AddBP0(CalculatePct(caster->GetMaxPower(POWER_MANA), multiplier));
+                            args.AddSpellMod(SPELLVALUE_BASE_POINT0, CalculatePct(caster->GetMaxPower(POWER_MANA), multiplier));
                             caster->CastSpell(caster, 47755, args);
                         }
                     }
@@ -1416,55 +1420,6 @@ void Aura::HandleAuraSpecificMods(AuraApplication const* aurApp, Unit* caster, b
                     break;
             }
             break;
-    }
-}
-
-void Aura::HandleAuraSpecificPeriodics(AuraApplication const* aurApp, Unit* caster)
-{
-    Unit* target = aurApp->GetTarget();
-
-    if (!caster || aurApp->GetRemoveMode())
-        return;
-
-    for (AuraEffect* effect : GetAuraEffects())
-    {
-        if (!effect || effect->IsAreaAuraEffect() || effect->IsEffect(SPELL_EFFECT_PERSISTENT_AREA_AURA))
-            continue;
-
-        switch (effect->GetSpellEffectInfo()->ApplyAuraName)
-        {
-            case SPELL_AURA_PERIODIC_DAMAGE:
-            case SPELL_AURA_PERIODIC_DAMAGE_PERCENT:
-            case SPELL_AURA_PERIODIC_LEECH:
-            {
-                // ignore non positive values (can be result apply spellmods to aura damage
-                uint32 damage = std::max(effect->GetAmount(), 0);
-
-                // Script Hook For HandlePeriodicDamageAurasTick -- Allow scripts to change the Damage pre class mitigation calculations
-                sScriptMgr->ModifyPeriodicDamageAurasTick(target, caster, damage);
-
-                effect->SetDonePct(caster->SpellDamagePctDone(target, m_spellInfo, DOT)); // Calculate done percentage first!
-                effect->SetDamage(caster->SpellDamageBonusDone(target, m_spellInfo, damage, DOT, effect->GetSpellEffectInfo(), GetStackAmount()) * effect->GetDonePct());
-                effect->SetCritChance(caster->GetUnitSpellCriticalChance(target, nullptr, effect, m_spellInfo->GetSchoolMask()));
-                break;
-            }
-            case SPELL_AURA_PERIODIC_HEAL:
-            case SPELL_AURA_OBS_MOD_HEALTH:
-            {
-                // ignore non positive values (can be result apply spellmods to aura damage
-                uint32 damage = std::max(effect->GetAmount(), 0);
-
-                // Script Hook For HandlePeriodicDamageAurasTick -- Allow scripts to change the Damage pre class mitigation calculations
-                sScriptMgr->ModifyPeriodicDamageAurasTick(target, caster, damage);
-
-                effect->SetDonePct(caster->SpellHealingPctDone(target, m_spellInfo)); // Calculate done percentage first!
-                effect->SetDamage(caster->SpellHealingBonusDone(target, m_spellInfo, damage, DOT, effect->GetSpellEffectInfo(), GetStackAmount()) * effect->GetDonePct());
-                effect->SetCritChance(caster->GetUnitSpellCriticalChance(target, nullptr, effect, m_spellInfo->GetSchoolMask()));
-                break;
-            }
-            default:
-                break;
-        }
     }
 }
 
@@ -1740,41 +1695,35 @@ uint32 Aura::GetProcEffectMask(AuraApplication* aurApp, ProcEventInfo& eventInfo
     // this is needed because this is the last moment in which you can prevent aura charge drop on proc
     // and possibly a way to prevent default checks (if there're going to be any)
 
-    // Aura added by spell can't trigger from self (prevent drop charges/do triggers)
-    // But except periodic and kill triggers (can triggered from self)
-    if (SpellInfo const* spellInfo = eventInfo.GetSpellInfo())
-        if (spellInfo->Id == GetId() && !(eventInfo.GetTypeMask() & (PROC_FLAG_TAKEN_PERIODIC | PROC_FLAG_KILL)))
-            return 0;
-
     // Check if current equipment meets aura requirements
     // do that only for passive spells
     /// @todo this needs to be unified for all kinds of auras
     Unit* target = aurApp->GetTarget();
-    if (IsPassive() && target->GetTypeId() == TYPEID_PLAYER)
+    if (IsPassive() && target->GetTypeId() == TYPEID_PLAYER && GetSpellInfo()->EquippedItemClass != -1)
     {
-        if (GetSpellInfo()->EquippedItemClass == ITEM_CLASS_WEAPON)
+        if (!GetSpellInfo()->HasAttribute(SPELL_ATTR3_NO_PROC_EQUIP_REQUIREMENT))
         {
-            if (target->ToPlayer()->IsInFeralForm())
-                return 0;
-
-            if (DamageInfo* damageInfo = eventInfo.GetDamageInfo())
+            Item* item = nullptr;
+            if (GetSpellInfo()->EquippedItemClass == ITEM_CLASS_WEAPON)
             {
-                WeaponAttackType attType = damageInfo->GetAttackType();
-                Item* item = nullptr;
-                if (attType == BASE_ATTACK || attType == RANGED_ATTACK)
-                    item = target->ToPlayer()->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
-                else if (attType == OFF_ATTACK)
-                    item = target->ToPlayer()->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-
-                if (!item || item->IsBroken() || item->GetTemplate()->GetClass() != ITEM_CLASS_WEAPON || !((1 << item->GetTemplate()->GetSubClass()) & GetSpellInfo()->EquippedItemSubClassMask))
+                if (target->ToPlayer()->IsInFeralForm())
                     return 0;
+
+                if (DamageInfo const* damageInfo = eventInfo.GetDamageInfo())
+                {
+                    if (damageInfo->GetAttackType() != OFF_ATTACK)
+                        item = target->ToPlayer()->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+                    else
+                        item = target->ToPlayer()->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+                }
             }
-        }
-        else if (GetSpellInfo()->EquippedItemClass == ITEM_CLASS_ARMOR)
-        {
-            // Check if player is wearing shield
-            Item* item = target->ToPlayer()->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-            if (!item || item->IsBroken() || item->GetTemplate()->GetClass() != ITEM_CLASS_ARMOR || !((1 << item->GetTemplate()->GetSubClass()) & GetSpellInfo()->EquippedItemSubClassMask))
+            else if (GetSpellInfo()->EquippedItemClass == ITEM_CLASS_ARMOR)
+            {
+                // Check if player is wearing shield
+                item = target->ToPlayer()->GetUseableItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+            }
+
+            if (!item || item->IsBroken() || !item->IsFitToSpellRequirements(GetSpellInfo()))
                 return 0;
         }
     }
@@ -1853,7 +1802,7 @@ float Aura::CalcPPMProcChance(Unit* actor) const
     using FSeconds = std::chrono::duration<float, Seconds::period>;
 
     // Formula see http://us.battle.net/wow/en/forum/topic/8197741003#1
-    float ppm = m_spellInfo->CalcProcPPM(actor, m_castItemLevel);
+    float ppm = m_spellInfo->CalcProcPPM(actor, GetCastItemLevel());
     float averageProcInterval = 60.0f / ppm;
 
     std::chrono::steady_clock::time_point currentTime = GameTime::GetGameTimeSteadyPoint();
@@ -2068,7 +2017,7 @@ void Aura::CallScriptEffectCalcSpellModHandlers(AuraEffect const* aurEff, SpellM
     }
 }
 
-void Aura::CallScriptEffectCalcCritChanceHandlers(AuraEffect const* aurEff, AuraApplication const* aurApp, Unit* victim, float& critChance)
+void Aura::CallScriptEffectCalcCritChanceHandlers(AuraEffect const* aurEff, AuraApplication const* aurApp, Unit const* victim, float& critChance)
 {
     for (AuraScript* loadedScript : m_loadedScripts)
     {
@@ -2325,10 +2274,12 @@ void UnitAura::FillTargetMap(std::unordered_map<Unit*, uint32>& targets, Unit* c
             continue;
 
         std::deque<Unit*> units;
+        ConditionContainer* condList = effect->ImplicitTargetConditions;
         // non-area aura
         if (effect->Effect == SPELL_EFFECT_APPLY_AURA)
         {
-            units.push_back(GetUnitOwner());
+            if (!condList || sConditionMgr->IsObjectMeetToConditions(GetUnitOwner(), GetUnitOwner(), *condList))
+                units.push_back(GetUnitOwner());
         }
         else
         {
@@ -2336,59 +2287,59 @@ void UnitAura::FillTargetMap(std::unordered_map<Unit*, uint32>& targets, Unit* c
 
             if (!GetUnitOwner()->HasUnitState(UNIT_STATE_ISOLATED))
             {
+                SpellTargetCheckTypes selectionType = TARGET_CHECK_DEFAULT;
                 switch (effect->Effect)
                 {
                     case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
-                    case SPELL_EFFECT_APPLY_AREA_AURA_RAID:
                     case SPELL_EFFECT_APPLY_AREA_AURA_PARTY_NONRANDOM:
-                    {
-                        units.push_back(GetUnitOwner());
-                        Trinity::AnyGroupedUnitInObjectRangeCheck u_check(GetUnitOwner(), GetUnitOwner(), radius, effect->Effect == SPELL_EFFECT_APPLY_AREA_AURA_RAID, m_spellInfo->HasAttribute(SPELL_ATTR3_ONLY_TARGET_PLAYERS), false, true);
-                        Trinity::UnitListSearcher<Trinity::AnyGroupedUnitInObjectRangeCheck> searcher(GetUnitOwner(), units, u_check);
-                        Cell::VisitAllObjects(GetUnitOwner(), searcher, radius);
+                        selectionType = TARGET_CHECK_PARTY;
                         break;
-                    }
+                    case SPELL_EFFECT_APPLY_AREA_AURA_RAID:
+                        selectionType = TARGET_CHECK_RAID;
+                        break;
                     case SPELL_EFFECT_APPLY_AREA_AURA_FRIEND:
-                    {
-                        units.push_back(GetUnitOwner());
-                        Trinity::AnyFriendlyUnitInObjectRangeCheck u_check(GetUnitOwner(), GetUnitOwner(), radius, m_spellInfo->HasAttribute(SPELL_ATTR3_ONLY_TARGET_PLAYERS), false, true);
-                        Trinity::UnitListSearcher<Trinity::AnyFriendlyUnitInObjectRangeCheck> searcher(GetUnitOwner(), units, u_check);
-                        Cell::VisitAllObjects(GetUnitOwner(), searcher, radius);
+                        selectionType = TARGET_CHECK_ALLY;
                         break;
-                    }
                     case SPELL_EFFECT_APPLY_AREA_AURA_ENEMY:
-                    {
-                        Trinity::AnyAoETargetUnitInObjectRangeCheck u_check(GetUnitOwner(), GetUnitOwner(), radius, m_spellInfo, false, true); // No GetCharmer in searcher
-                        Trinity::UnitListSearcher<Trinity::AnyAoETargetUnitInObjectRangeCheck> searcher(GetUnitOwner(), units, u_check);
-                        Cell::VisitAllObjects(GetUnitOwner(), searcher, radius);
+                        selectionType = TARGET_CHECK_ENEMY;
                         break;
-                    }
                     case SPELL_EFFECT_APPLY_AREA_AURA_PET:
-                        units.push_back(GetUnitOwner());
+                        if (!condList || sConditionMgr->IsObjectMeetToConditions(GetUnitOwner(), GetUnitOwner(), *condList))
+                            units.push_back(GetUnitOwner());
                         /* fallthrough */
                     case SPELL_EFFECT_APPLY_AREA_AURA_OWNER:
                     {
                         if (Unit* owner = GetUnitOwner()->GetCharmerOrOwner())
                             if (GetUnitOwner()->IsWithinDistInMap(owner, radius))
-                                units.push_back(owner);
+                                if (!condList || sConditionMgr->IsObjectMeetToConditions(owner, GetUnitOwner(), *condList))
+                                    units.push_back(owner);
                         break;
                     }
                     case SPELL_EFFECT_APPLY_AURA_ON_PET:
                     {
                         if (Unit* pet = ObjectAccessor::GetUnit(*GetUnitOwner(), GetUnitOwner()->GetPetGUID()))
-                            units.push_back(pet);
+                            if (!condList || sConditionMgr->IsObjectMeetToConditions(pet, GetUnitOwner(), *condList))
+                                units.push_back(pet);
                         break;
                     }
                     case SPELL_EFFECT_APPLY_AREA_AURA_SUMMONS:
                     {
-                        units.push_back(GetUnitOwner());
-                        Trinity::WorldObjectSpellAreaTargetCheck check(radius, GetUnitOwner(), caster, GetUnitOwner(), m_spellInfo, TARGET_CHECK_SUMMONED, effect->ImplicitTargetConditions, TARGET_OBJECT_TYPE_UNIT);
-                        Trinity::UnitListSearcher<Trinity::WorldObjectSpellAreaTargetCheck> searcher(GetUnitOwner(), units, check);
-                        Cell::VisitAllObjects(GetUnitOwner(), searcher, radius);
-                        // by design WorldObjectSpellAreaTargetCheck allows not-in-world units (for spells) but for auras it is not acceptable
-                        units.erase(std::remove_if(units.begin(), units.end(), [this](Unit* unit) { return !unit->IsSelfOrInSameMap(GetUnitOwner()); }), units.end());
+                        if (!condList || sConditionMgr->IsObjectMeetToConditions(GetUnitOwner(), GetUnitOwner(), *condList))
+                            units.push_back(GetUnitOwner());
+
+                        selectionType = TARGET_CHECK_SUMMONED;
                         break;
                     }
+                }
+
+                if (selectionType != TARGET_CHECK_DEFAULT)
+                {
+                    Trinity::WorldObjectSpellAreaTargetCheck check(radius, GetUnitOwner(), caster, GetUnitOwner(), m_spellInfo, selectionType, condList, TARGET_OBJECT_TYPE_UNIT);
+                    Trinity::UnitListSearcher<Trinity::WorldObjectSpellAreaTargetCheck> searcher(GetUnitOwner(), units, check);
+                    Cell::VisitAllObjects(GetUnitOwner(), searcher, radius);
+
+                    // by design WorldObjectSpellAreaTargetCheck allows not-in-world units (for spells) but for auras it is not acceptable
+                    units.erase(std::remove_if(units.begin(), units.end(), [this](Unit* unit) { return !unit->IsSelfOrInSameMap(GetUnitOwner()); }), units.end());
                 }
             }
         }
@@ -2440,20 +2391,20 @@ void DynObjAura::FillTargetMap(std::unordered_map<Unit*, uint32>& targets, Unit*
         if (!effect || !HasEffect(effect->EffectIndex))
             continue;
 
+        // we can't use effect type like area auras to determine check type, check targets
+        SpellTargetCheckTypes selectionType = effect->TargetA.GetCheckType();
+        if (effect->TargetB.GetReferenceType() == TARGET_REFERENCE_TYPE_DEST)
+            selectionType = effect->TargetB.GetCheckType();
+
         std::deque<Unit*> units;
-        if (effect->TargetB.GetTarget() == TARGET_DEST_DYNOBJ_ALLY
-            || effect->TargetB.GetTarget() == TARGET_UNIT_DEST_AREA_ALLY)
-        {
-            Trinity::AnyFriendlyUnitInObjectRangeCheck u_check(GetDynobjOwner(), dynObjOwnerCaster, radius, m_spellInfo->HasAttribute(SPELL_ATTR3_ONLY_TARGET_PLAYERS), false, true);
-            Trinity::UnitListSearcher<Trinity::AnyFriendlyUnitInObjectRangeCheck> searcher(GetDynobjOwner(), units, u_check);
-            Cell::VisitAllObjects(GetDynobjOwner(), searcher, radius);
-        }
-        else
-        {
-            Trinity::AnyAoETargetUnitInObjectRangeCheck u_check(GetDynobjOwner(), dynObjOwnerCaster, radius, nullptr, false, true);
-            Trinity::UnitListSearcher<Trinity::AnyAoETargetUnitInObjectRangeCheck> searcher(GetDynobjOwner(), units, u_check);
-            Cell::VisitAllObjects(GetDynobjOwner(), searcher, radius);
-        }
+        ConditionContainer* condList = effect->ImplicitTargetConditions;
+
+        Trinity::WorldObjectSpellAreaTargetCheck check(radius, GetDynobjOwner(), dynObjOwnerCaster, dynObjOwnerCaster, m_spellInfo, selectionType, condList, TARGET_OBJECT_TYPE_UNIT);
+        Trinity::UnitListSearcher<Trinity::WorldObjectSpellAreaTargetCheck> searcher(GetDynobjOwner(), units, check);
+        Cell::VisitAllObjects(GetDynobjOwner(), searcher, radius);
+
+        // by design WorldObjectSpellAreaTargetCheck allows not-in-world units (for spells) but for auras it is not acceptable
+        units.erase(std::remove_if(units.begin(), units.end(), [this](Unit* unit) { return !unit->IsSelfOrInSameMap(GetUnitOwner()); }), units.end());
 
         for (Unit* unit : units)
         {

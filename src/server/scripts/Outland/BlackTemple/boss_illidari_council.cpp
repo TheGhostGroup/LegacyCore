@@ -201,10 +201,10 @@ struct boss_illidari_council : public BossAI
         if (!UpdateVictim())
             return;
 
+        events.Update(diff);
+
         if (me->HasUnitState(UNIT_STATE_CASTING))
             return;
-
-        events.Update(diff);
 
         while (uint32 eventId = events.ExecuteEvent())
         {
@@ -275,7 +275,7 @@ struct IllidariCouncilBossAI : public BossAI
 
     void DamageTaken(Unit* who, uint32 &damage) override
     {
-        if (damage >= me->GetHealth() && who->GetGUID() != me->GetGUID())
+        if (damage >= me->GetHealth() && (!who || who->GetGUID() != me->GetGUID()))
             damage = me->GetHealth() - 1;
     }
 

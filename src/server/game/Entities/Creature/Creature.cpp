@@ -374,9 +374,8 @@ void Creature::SearchFormation()
     if (!lowguid)
         return;
 
-    CreatureGroupInfoType::iterator frmdata = sFormationMgr->CreatureGroupMap.find(lowguid);
-    if (frmdata != sFormationMgr->CreatureGroupMap.end())
-        sFormationMgr->AddCreatureToGroup(frmdata->second->leaderGUID, this);
+    if (FormationInfo const* formationInfo = sFormationMgr->GetFormationInfo(lowguid))
+        sFormationMgr->AddCreatureToGroup(formationInfo->LeaderSpawnId, this);
 }
 
 bool Creature::IsFormationLeader() const
@@ -1066,17 +1065,18 @@ bool Creature::AIM_Initialize(CreatureAI* ai)
 
 void Creature::Motion_Initialize()
 {
-    if (!m_formation)
-        GetMotionMaster()->Initialize();
-    else if (m_formation->getLeader() == this)
+    if (m_formation)
     {
-        m_formation->FormationReset(false);
-        GetMotionMaster()->Initialize();
+        if (m_formation->GetLeader() == this)
+            m_formation->FormationReset(false);
+        else if (m_formation->IsFormed())
+        {
+            GetMotionMaster()->MoveIdle(); //wait the order of leader
+            return;
+        }
     }
-    else if (m_formation->isFormed())
-        GetMotionMaster()->MoveIdle(); //wait the order of leader
-    else
-        GetMotionMaster()->Initialize();
+
+    GetMotionMaster()->Initialize();
 }
 
 bool Creature::Create(ObjectGuid::LowType guidlow, Map* map, uint32 entry, Position const& pos, CreatureData const* data /*= nullptr*/, uint32 vehId /*= 0*/, bool dynamic)
@@ -1213,31 +1213,8 @@ Unit* Creature::SelectVictim()
 {
     Unit* target = nullptr;
 
-    ThreatManager& mgr = GetThreatManager();
-
-    if (mgr.CanHaveThreatList())
-    {
-        target = mgr.SelectVictim();
-        while (!target)
-        {
-            Unit* newTarget = nullptr;
-            // nothing found to attack - try to find something we're in combat with (but don't have a threat entry for yet) and start attacking it
-            for (auto const& pair : GetCombatManager().GetPvECombatRefs())
-            {
-                newTarget = pair.second->GetOther(this);
-                if (!mgr.IsThreatenedBy(newTarget, true))
-                {
-                    mgr.AddThreat(newTarget, 0.0f, nullptr, true, true);
-                    break;
-                }
-                else
-                    newTarget = nullptr;
-            }
-            if (!newTarget)
-                break;
-            target = mgr.SelectVictim();
-        }
-    }
+    if (CanHaveThreatList())
+        target = GetThreatManager().SelectVictim();
     else if (!HasReactState(REACT_PASSIVE))
     {
         // We're a player pet, probably
@@ -1276,15 +1253,6 @@ Unit* Creature::SelectVictim()
     /// @todo a vehicle may eat some mob, so mob should not evade
     if (GetVehicle())
         return nullptr;
-
-    // search nearby enemy before enter evade mode
-    if (HasReactState(REACT_AGGRESSIVE))
-    {
-        target = SelectNearestTargetInAttackDistance(m_CombatDistance ? m_CombatDistance : ATTACK_DISTANCE);
-
-        if (target && _IsTargetAcceptable(target) && CanCreatureAttack(target))
-            return target;
-    }
 
     Unit::AuraEffectList const& iAuras = GetAuraEffectsByType(SPELL_AURA_MOD_INVISIBILITY);
     if (!iAuras.empty())
@@ -2152,7 +2120,7 @@ void Creature::setDeathState(DeathState s)
         }
 
         //Dismiss group if is leader
-        if (m_formation && m_formation->getLeader() == this)
+        if (m_formation && m_formation->GetLeader() == this)
             m_formation->FormationReset(true);
 
         if ((CanFly() || IsFlying()))
@@ -2756,40 +2724,6 @@ void Creature::SendZoneUnderAttackMessage(Player* attacker)
     sWorld->SendGlobalMessage(packet.Write(), nullptr, (enemy_team == ALLIANCE ? HORDE : ALLIANCE));
 }
 
-void Creature::SetInCombatWithZone()
-{
-    if (!CanHaveThreatList())
-    {
-        TC_LOG_ERROR("entities.unit", "Creature entry %u call SetInCombatWithZone but creature cannot have threat list.", GetEntry());
-        return;
-    }
-
-    Map* map = GetMap();
-
-    if (!map->IsDungeon())
-    {
-        TC_LOG_ERROR("entities.unit", "Creature entry %u call SetInCombatWithZone for map (id: %u) that isn't an instance.", GetEntry(), map->GetId());
-        return;
-    }
-
-    Map::PlayerList const& PlList = map->GetPlayers();
-
-    if (PlList.isEmpty())
-        return;
-
-    for (Map::PlayerList::const_iterator i = PlList.begin(); i != PlList.end(); ++i)
-    {
-        if (Player* player = i->GetSource())
-        {
-            if (player->IsGameMaster())
-                continue;
-
-            if (player->IsAlive())
-                EngageWithTarget(player);
-        }
-    }
-}
-
 bool Creature::HasSpell(uint32 spellID) const
 {
     for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
@@ -3235,6 +3169,10 @@ void Creature::FocusTarget(Spell const* focusSpell, WorldObject const* target)
 {
     // already focused
     if (m_focusSpell)
+        return;
+
+    // some spells shouldn't track targets
+    if (focusSpell->IsFocusDisabled())
         return;
 
     SpellInfo const* spellInfo = focusSpell->GetSpellInfo();

@@ -50,6 +50,7 @@ struct SpellCooldownsEntry;
 struct SpellEffectEntry;
 struct SpellEquippedItemsEntry;
 struct SpellInterruptsEntry;
+struct SpellLabelEntry;
 struct SpellLevelsEntry;
 struct SpellMiscEntry;
 struct SpellNameEntry;
@@ -192,9 +193,8 @@ enum ProcFlags
                                                 | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG
                                                 | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS
                                                 | PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG
+                                                | PROC_FLAG_DONE_PERIODIC | PROC_FLAG_TAKEN_PERIODIC
                                                 | PROC_FLAG_DONE_TRAP_ACTIVATION,
-
-    PERIODIC_PROC_FLAG_MASK                    = PROC_FLAG_DONE_PERIODIC | PROC_FLAG_TAKEN_PERIODIC,
 
     DONE_HIT_PROC_FLAG_MASK                    = PROC_FLAG_DONE_MELEE_AUTO_ATTACK | PROC_FLAG_DONE_RANGED_AUTO_ATTACK
                                                  | PROC_FLAG_DONE_SPELL_MELEE_DMG_CLASS | PROC_FLAG_DONE_SPELL_RANGED_DMG_CLASS
@@ -357,7 +357,7 @@ struct SpellThreatEntry
     float       apPctMod;                                   // Pct of AP that is added as Threat - default: 0.0f
 };
 
-typedef std::map<uint32, SpellThreatEntry> SpellThreatMap;
+typedef std::unordered_map<uint32, SpellThreatEntry> SpellThreatMap;
 
 // coordinates for spells (accessed using SpellMgr functions)
 struct SpellTargetPosition
@@ -613,6 +613,7 @@ struct SpellInfoLoadHelper
     std::array<SpellEffectEntry const*, MAX_SPELL_EFFECTS> Effects = { };
     SpellEquippedItemsEntry const* EquippedItems = nullptr;
     SpellInterruptsEntry const* Interrupts = nullptr;
+    std::vector<SpellLabelEntry const*> Labels;
     SpellLevelsEntry const* Levels = nullptr;
     SpellMiscEntry const* Misc = nullptr;
     std::array<SpellPowerEntry const*, MAX_POWERS_PER_SPELL> Powers;

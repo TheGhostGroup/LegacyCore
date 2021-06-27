@@ -786,7 +786,7 @@ class npc_living_constellation : public CreatureScript
 
                 me->DespawnOrUnsummon(1);
                 if (InstanceScript* instance = me->GetInstanceScript())
-                    instance->DoStartCriteriaTimer(CRITERIA_TIMED_TYPE_EVENT, EVENT_ID_SUPERMASSIVE_START);
+                    instance->DoStartCriteriaTimer(CriteriaStartEvent::SendEvent, EVENT_ID_SUPERMASSIVE_START);
                 caster->CastSpell(nullptr, SPELL_BLACK_HOLE_CREDIT, TRIGGERED_FULL_MASK);
                 caster->ToCreature()->DespawnOrUnsummon(1);
             }
@@ -990,7 +990,7 @@ class go_celestial_planetarium_access : public GameObjectScript
 
             InstanceScript* instance;
 
-            bool GossipHello(Player* player) override
+            bool OnReportUse(Player* player) override
             {
                 if (me->HasFlag(GO_FLAG_IN_USE))
                     return true;
@@ -1196,7 +1196,7 @@ class spell_algalon_collapse : public SpellScriptLoader
             void HandlePeriodic(AuraEffect const* /*aurEff*/)
             {
                 PreventDefaultAction();
-                GetTarget()->DealDamage(GetTarget(), GetTarget()->CountPctFromMaxHealth(1), nullptr, NODAMAGE);
+                Unit::DealDamage(GetTarget(), GetTarget(), GetTarget()->CountPctFromMaxHealth(1), nullptr, NODAMAGE);
             }
 
             void Register() override
@@ -1358,7 +1358,7 @@ class spell_algalon_supermassive_fail : public SpellScriptLoader
                 if (!GetHitPlayer())
                     return;
 
-                GetHitPlayer()->ResetCriteria(CRITERIA_CONDITION_NO_SPELL_HIT, GetSpellInfo()->Id, true);
+                GetHitPlayer()->ResetCriteria(CriteriaFailEvent::BeSpellTarget, GetSpellInfo()->Id, true);
             }
 
             void Register() override

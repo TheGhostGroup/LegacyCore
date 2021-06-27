@@ -276,8 +276,8 @@ public:
     virtual void SendAllData(Player const* receiver) const = 0;
 
     void UpdateTimedCriteria(uint32 timeDiff);
-    void StartCriteriaTimer(CriteriaTimedTypes type, uint32 entry, uint32 timeLost = 0);
-    void RemoveCriteriaTimer(CriteriaTimedTypes type, uint32 entry);   // used for quest and scripted timed s
+    void StartCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry, uint32 timeLost = 0);
+    void RemoveCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry);   // used for quest and scripted timed s
 
 protected:
     virtual void SendCriteriaUpdate(Criteria const* criteria, CriteriaProgress const* progress, Seconds timeElapsed, bool timedCompleted) const = 0;
@@ -345,15 +345,15 @@ public:
         return itr != _criteriaTreeByCriteria.end() ? &itr->second : nullptr;
     }
 
-    CriteriaList const& GetTimedCriteriaByType(CriteriaTimedTypes type) const
+    CriteriaList const& GetTimedCriteriaByType(CriteriaStartEvent startEvent) const
     {
-        return _criteriasByTimedType[type];
+        return _criteriasByTimedType[size_t(startEvent)];
     }
 
-    CriteriaList const* GetCriteriaByFailEvent(CriteriaCondition condition, int32 asset)
+    CriteriaList const* GetCriteriaByFailEvent(CriteriaFailEvent condition, int32 asset)
     {
-        auto itr = _criteriasByFailEvent[condition].find(asset);
-        return itr != _criteriasByFailEvent[condition].end() ? &itr->second : nullptr;
+        auto itr = _criteriasByFailEvent[size_t(condition)].find(asset);
+        return itr != _criteriasByFailEvent[size_t(condition)].end() ? &itr->second : nullptr;
     }
 
     CriteriaDataSet const* GetCriteriaDataSet(Criteria const* Criteria) const
@@ -412,8 +412,8 @@ private:
     CriteriaList _scenarioCriteriasByType[CRITERIA_TYPE_TOTAL];
     CriteriaList _questObjectiveCriteriasByType[CRITERIA_TYPE_TOTAL];
 
-    CriteriaList _criteriasByTimedType[CRITERIA_TIMED_TYPE_MAX];
-    std::unordered_map<int32, CriteriaList> _criteriasByFailEvent[CRITERIA_CONDITION_MAX];
+    CriteriaList _criteriasByTimedType[size_t(CriteriaStartEvent::Count)];
+    std::unordered_map<int32, CriteriaList> _criteriasByFailEvent[size_t(CriteriaFailEvent::Count)];
 };
 
 #define sCriteriaMgr CriteriaMgr::Instance()

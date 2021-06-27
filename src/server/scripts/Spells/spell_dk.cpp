@@ -145,7 +145,7 @@ public:
         if (!GetTarget()->HasAura(SPELL_DK_VOLATILE_SHIELDING))
         {
             CastSpellExtraArgs args(aurEff);
-            args.SpellValueOverrides.AddBP0(CalculatePct(absorbAmount, 2 * absorbAmount * 100 / maxHealth));
+            args.AddSpellMod(SPELLVALUE_BASE_POINT0, CalculatePct(absorbAmount, 2 * absorbAmount * 100 / maxHealth));
             GetTarget()->CastSpell(GetTarget(), SPELL_DK_RUNIC_POWER_ENERGIZE, args);
         }
     }
@@ -286,7 +286,7 @@ class spell_dk_dancing_rune_weapon : public AuraScript
         int32 amount = static_cast<int32>(damageInfo->GetDamage()) / 2;
         SpellNonMeleeDamage log(drw, drw->GetVictim(), spellInfo, { spellInfo->GetSpellXSpellVisualId(drw), 0 }, spellInfo->GetSchoolMask());
         log.damage = amount;
-        drw->DealDamage(drw->GetVictim(), amount, nullptr, SPELL_DIRECT_DAMAGE, spellInfo->GetSchoolMask(), spellInfo, true);
+        Unit::DealDamage(drw, drw->GetVictim(), amount, nullptr, SPELL_DIRECT_DAMAGE, spellInfo->GetSchoolMask(), spellInfo, true);
         drw->SendSpellNonMeleeDamageLog(&log);
     }
 

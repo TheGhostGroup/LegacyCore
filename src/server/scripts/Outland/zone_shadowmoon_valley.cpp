@@ -552,7 +552,7 @@ public:
                             player->KilledMonsterCredit(23209);
                     }
                     PoisonTimer = 0;
-                    me->DealDamage(me, me->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+                    me->KillSelf();
                 } else PoisonTimer -= diff;
             }
             if (!UpdateVictim())
@@ -972,6 +972,9 @@ public:
 
         void JustDied(Unit* killer) override
         {
+            if (!killer)
+                return;
+
             switch (killer->GetTypeId())
             {
                 case TYPEID_UNIT:

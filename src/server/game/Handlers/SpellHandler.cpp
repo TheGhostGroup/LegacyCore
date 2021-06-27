@@ -306,18 +306,20 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spells::CastSpell& cast)
     // Check possible spell cast overrides
     spellInfo = caster->GetCastSpellInfo(spellInfo);
 
-    // Client is resending autoshot cast opcode when other spell is cast during shoot rotation
-    // Skip it to prevent "interrupt" message
-    if (spellInfo->IsAutoRepeatRangedSpell() && caster->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL)
-        && caster->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL)->m_spellInfo == spellInfo)
-        return;
-
     // can't use our own spells when we're in possession of another unit,
     if (_player->isPossessing())
         return;
 
     // client provided targets
     SpellCastTargets targets(caster, cast.Cast);
+
+    // Client is resending autoshot cast opcode when other spell is cast during shoot rotation
+    // Skip it to prevent "interrupt" message
+    // Also check targets! target may have changed and we need to interrupt current spell
+    if (spellInfo->IsAutoRepeatRangedSpell())
+        if (Spell* spell = caster->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+            if (spell->m_spellInfo == spellInfo && spell->m_targets.GetUnitTargetGUID() == targets.GetUnitTargetGUID())
+                return;
 
     // auto-selection buff level base at target level (in spellInfo)
     if (targets.GetUnitTarget())
@@ -332,7 +334,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPackets::Spells::CastSpell& cast)
     if (cast.Cast.MoveUpdate)
         HandleMovementOpcode(CMSG_MOVE_STOP, *cast.Cast.MoveUpdate);
 
-    Spell* spell = new Spell(caster, spellInfo, TRIGGERED_NONE, ObjectGuid::Empty, false);
+    Spell* spell = new Spell(caster, spellInfo, TRIGGERED_NONE);
 
     WorldPackets::Spells::SpellPrepare spellPrepare;
     spellPrepare.ClientCastID = cast.Cast.CastID;

@@ -191,6 +191,7 @@ enum SpellCustomAttributes
     SPELL_ATTR0_CU_NO_INITIAL_THREAT             = 0x00000010,
     SPELL_ATTR0_CU_AURA_CC                       = 0x00000020,
     SPELL_ATTR0_CU_DONT_BREAK_STEALTH            = 0x00000040,
+    SPELL_ATTR0_CU_CAN_CRIT                      = 0x00000080,
     SPELL_ATTR0_CU_DIRECT_DAMAGE                 = 0x00000100,
     SPELL_ATTR0_CU_CHARGE                        = 0x00000200,
     SPELL_ATTR0_CU_PICKPOCKET                    = 0x00000400,
@@ -457,6 +458,7 @@ class TC_GAME_API SpellInfo
         int32 RequiredAreasID = -1;
         uint32 SchoolMask = 0;
         uint32 ChargeCategoryId = 0;
+        std::unordered_set<uint32> Labels;
 
         // SpellScalingEntry
         struct ScalingInfo
@@ -470,7 +472,8 @@ class TC_GAME_API SpellInfo
         uint32 ExplicitTargetMask = 0;
         SpellChainNode const* ChainEntry = nullptr;
 
-        SpellInfo(SpellNameEntry const* spellName, ::Difficulty difficulty, SpellInfoLoadHelper const& data, SpellVisualVector&& visuals);
+        SpellInfo(SpellNameEntry const* spellName, ::Difficulty difficulty, SpellInfoLoadHelper const& data,
+            std::vector<SpellLabelEntry const*> const& labels, SpellVisualVector&& visuals);
         SpellInfo(SpellNameEntry const* spellName, ::Difficulty difficulty, std::vector<SpellEffectEntry> const& effects);
         ~SpellInfo();
 
@@ -630,6 +633,8 @@ class TC_GAME_API SpellInfo
 
         // Player Condition
         bool MeetsFutureSpellPlayerCondition(Player const* player) const;
+
+        bool HasLabel(uint32 labelId) const;
 
     private:
         // loading helpers

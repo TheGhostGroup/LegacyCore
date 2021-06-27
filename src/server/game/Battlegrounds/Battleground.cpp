@@ -860,7 +860,8 @@ uint32 Battleground::GetBonusHonorFromKill(uint32 kills) const
 
 void Battleground::BlockMovement(Player* player)
 {
-    player->SetClientControl(player, 0);                          // movement disabled NOTE: the effect will be automatically removed by client when the player is teleported from the battleground, so no need to send with uint8(1) in RemovePlayerAtLeave()
+    // movement disabled NOTE: the effect will be automatically removed by client when the player is teleported from the battleground, so no need to send with uint8(1) in RemovePlayerAtLeave()
+    player->SetClientControl(player, false);
 }
 
 void Battleground::RemovePlayerAtLeave(ObjectGuid guid, bool Transport, bool SendPacket)
@@ -966,7 +967,7 @@ void Battleground::RemovePlayerAtLeave(ObjectGuid guid, bool Transport, bool Sen
         player->SetBGTeam(0);
 
         // remove all criterias on bg leave
-        player->ResetCriteria(CRITERIA_CONDITION_BG_MAP, GetMapId(), true);
+        player->ResetCriteria(CriteriaFailEvent::LeaveBattleground, GetMapId(), true);
 
         if (Transport)
             player->TeleportToBGEntryPoint();
@@ -1116,7 +1117,7 @@ void Battleground::AddPlayer(Player* player)
     }
 
     // reset all map criterias on map enter
-    player->ResetCriteria(CRITERIA_CONDITION_BG_MAP, GetMapId(), true);
+    player->ResetCriteria(CriteriaFailEvent::LeaveBattleground, GetMapId(), true);
 
     // setup BG group membership
     PlayerAddedToBGCheckIfBGIsRunning(player);
@@ -1858,11 +1859,11 @@ WorldSafeLocsEntry const* Battleground::GetClosestGraveyard(Player* player)
     return sObjectMgr->GetClosestGraveyard(*player, player->GetTeam(), player);
 }
 
-void Battleground::StartCriteriaTimer(CriteriaTimedTypes type, uint32 entry)
+void Battleground::StartCriteriaTimer(CriteriaStartEvent startEvent, uint32 entry)
 {
     for (BattlegroundPlayerMap::const_iterator itr = GetPlayers().begin(); itr != GetPlayers().end(); ++itr)
         if (Player* player = ObjectAccessor::FindPlayer(itr->first))
-            player->StartCriteriaTimer(type, entry);
+            player->StartCriteriaTimer(startEvent, entry);
 }
 
 void Battleground::SetBracket(PVPDifficultyEntry const* bracketEntry)

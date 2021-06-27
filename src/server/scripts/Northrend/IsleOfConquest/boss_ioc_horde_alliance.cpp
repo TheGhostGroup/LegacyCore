@@ -71,7 +71,7 @@ public:
         void SpellHit(Unit* caster, SpellInfo const* /*spell*/) override
         {
             if (caster->IsVehicle())
-                me->Kill(caster);
+                Unit::Kill(me, caster);
         }
 
         void UpdateAI(uint32 diff) override
@@ -79,10 +79,10 @@ public:
             if (!UpdateVictim())
                 return;
 
+            _events.Update(diff);
+
             if (me->HasUnitState(UNIT_STATE_CASTING))
                 return;
-
-            _events.Update(diff);
 
             while (uint32 eventId = _events.ExecuteEvent())
             {

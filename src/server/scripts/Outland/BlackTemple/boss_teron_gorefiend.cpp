@@ -170,10 +170,10 @@ struct boss_teron_gorefiend : public BossAI
         if (!events.IsInPhase(PHASE_INTRO) && !UpdateVictim())
             return;
 
+        events.Update(diff);
+
         if (me->HasUnitState(UNIT_STATE_CASTING))
             return;
-
-        events.Update(diff);
 
         while (uint32 eventId = events.ExecuteEvent())
         {
@@ -233,7 +233,7 @@ struct npc_doom_blossom : public NullCreatureAI
 
         DoCast(SPELL_SUMMON_BLOSSOM_MOVE_TARGET);
         _scheduler.CancelAll();
-        me->SetInCombatWithZone();
+        DoZoneInCombat();
         _scheduler.Schedule(Seconds(12), [this](TaskContext shadowBolt)
         {
             if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0))

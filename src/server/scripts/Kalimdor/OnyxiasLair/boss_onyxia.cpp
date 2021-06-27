@@ -157,7 +157,7 @@ public:
             _Reset();
             me->SetReactState(REACT_AGGRESSIVE);
             instance->SetData(DATA_ONYXIA_PHASE, Phase);
-            instance->DoStopCriteriaTimer(CRITERIA_TIMED_TYPE_EVENT, ACHIEV_TIMED_START_EVENT);
+            instance->DoStopCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_TIMED_START_EVENT);
         }
 
         void JustEngagedWith(Unit* /*who*/) override
@@ -168,12 +168,12 @@ public:
             events.ScheduleEvent(EVENT_TAIL_SWEEP, urand(15000, 20000));
             events.ScheduleEvent(EVENT_CLEAVE, urand(2000, 5000));
             events.ScheduleEvent(EVENT_WING_BUFFET, urand(10000, 20000));
-            instance->DoStartCriteriaTimer(CRITERIA_TIMED_TYPE_EVENT, ACHIEV_TIMED_START_EVENT);
+            instance->DoStartCriteriaTimer(CriteriaStartEvent::SendEvent, ACHIEV_TIMED_START_EVENT);
         }
 
         void JustSummoned(Creature* summoned) override
         {
-            summoned->SetInCombatWithZone();
+            DoZoneInCombat(summoned);
             if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0))
                 summoned->AI()->AttackStart(target);
 
@@ -231,7 +231,7 @@ public:
                         me->SetDisableGravity(false);
                         me->SetAnimTier(UNIT_BYTE1_FLAG_NONE, false);
                         if (Creature* trigger = ObjectAccessor::GetCreature(*me, triggerGUID))
-                            me->Kill(trigger);
+                            Unit::Kill(me, trigger);
                         me->SetReactState(REACT_AGGRESSIVE);
                         // tank selection based on phase one. If tank is not there i take nearest one
                         if (Unit* tank = ObjectAccessor::GetUnit(*me, tankGUID))

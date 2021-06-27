@@ -79,12 +79,12 @@ AuctionsBucketKey AuctionsBucketKey::ForItem(Item* item)
         };
     }
     else
-        return ForCommodity(item->GetEntry());
+        return ForCommodity(itemTemplate);
 }
 
-AuctionsBucketKey AuctionsBucketKey::ForCommodity(uint32 itemId)
+AuctionsBucketKey AuctionsBucketKey::ForCommodity(ItemTemplate const* itemTemplate)
 {
-    return { itemId, 0, 0, 0 };
+    return { itemTemplate->GetId(), uint16(itemTemplate->GetBaseItemLevel()), 0, 0 };
 }
 
 bool operator<(AuctionsBucketKey const& left, AuctionsBucketKey const& right)
@@ -732,7 +732,6 @@ void AuctionHouseMgr::PendingAuctionProcess(Player* player)
             trans->Append(stmt);
             ++itrAH;
         } while (itrAH != iterMap->second.Auctions.end());
-
         CharacterDatabase.CommitTransaction(trans);
     }
 
@@ -1552,14 +1551,18 @@ void AuctionHouseObject::BuildReplicate(WorldPackets::AuctionHouse::AuctionRepli
     replicateResponse.ChangeNumberTombstone = throttleItr->second.Tombstone = !count ? _itemsByAuctionId.rbegin()->first : 0;
 }
 
-uint64 AuctionHouseObject::CalcualteAuctionHouseCut(uint64 bidAmount) const
+uint64 AuctionHouseObject::CalculateAuctionHouseCut(uint64 bidAmount) const
 {
     return std::max(int64(CalculatePct(bidAmount, _auctionHouse->ConsignmentRate) * double(sWorld->getRate(RATE_AUCTION_CUT))), SI64LIT(0));
 }
 
 CommodityQuote const* AuctionHouseObject::CreateCommodityQuote(Player* player, uint32 itemId, uint32 quantity)
 {
-    auto bucketItr = _buckets.find(AuctionsBucketKey::ForCommodity(itemId));
+    ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(itemId);
+    if (!itemTemplate)
+        return nullptr;
+
+    auto bucketItr = _buckets.find(AuctionsBucketKey::ForCommodity(itemTemplate));
     if (bucketItr == _buckets.end())
         return nullptr;
 
@@ -1602,7 +1605,11 @@ void AuctionHouseObject::CancelCommodityQuote(ObjectGuid guid)
 
 bool AuctionHouseObject::BuyCommodity(CharacterDatabaseTransaction trans, Player* player, uint32 itemId, uint32 quantity, Milliseconds delayForNextAction)
 {
-    auto bucketItr = _buckets.find(AuctionsBucketKey::ForCommodity(itemId));
+    ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(itemId);
+    if (!itemTemplate)
+        return false;
+
+    auto bucketItr = _buckets.find(AuctionsBucketKey::ForCommodity(itemTemplate));
     if (bucketItr == _buckets.end())
     {
         player->GetSession()->SendAuctionCommandResult(0, AuctionCommand::PlaceBid, AuctionResult::CommodityPurchaseFailed, delayForNextAction);
@@ -1749,7 +1756,7 @@ bool AuctionHouseObject::BuyCommodity(CharacterDatabaseTransaction trans, Player
                 sCharacterCache->GetCharacterAccountIdByGuid(auction->Owner));
         }
 
-        uint64 auctionHouseCut = CalcualteAuctionHouseCut(auction->BuyoutOrUnitPrice * boughtFromAuction);
+        uint64 auctionHouseCut = CalculateAuctionHouseCut(auction->BuyoutOrUnitPrice * boughtFromAuction);
         uint64 depositPart = AuctionHouseMgr::GetCommodityAuctionDeposit(items[0].Items[0]->GetTemplate(), std::chrono::duration_cast<Minutes>(auction->EndTime - auction->StartTime),
             boughtFromAuction);
         uint64 profit = auction->BuyoutOrUnitPrice * boughtFromAuction + depositPart - auctionHouseCut;
@@ -1766,6 +1773,9 @@ bool AuctionHouseObject::BuyCommodity(CharacterDatabaseTransaction trans, Player
             .AddMoney(profit)
             .SendMailTo(trans, MailReceiver(ObjectAccessor::FindConnectedPlayer(auction->Owner), auction->Owner), this, MAIL_CHECK_MASK_COPIED, sWorld->getIntConfig(CONFIG_MAIL_DELIVERY_DELAY));
     }
+
+    player->ModifyMoney(-int64(totalPrice));
+    player->SaveGoldToDB(trans);
 
     for (MailedItemsBatch const& batch : items)
     {
@@ -1917,7 +1927,7 @@ void AuctionHouseObject::SendAuctionSold(AuctionPosting const* auction, Player* 
     // owner exist
     if ((owner || sCharacterCache->HasCharacterCacheEntry(auction->Owner)) && !sAuctionBotConfig->IsBotChar(auction->Owner))
     {
-        uint64 auctionHouseCut = CalcualteAuctionHouseCut(auction->BidAmount);
+        uint64 auctionHouseCut = CalculateAuctionHouseCut(auction->BidAmount);
         uint64 profit = auction->BidAmount + auction->Deposit - auctionHouseCut;
 
         //FIXME: what do if owner offline
@@ -2005,7 +2015,7 @@ void AuctionHouseObject::SendAuctionInvoice(AuctionPosting const* auction, Playe
 
         MailDraft(AuctionHouseMgr::BuildItemAuctionMailSubject(AuctionMailType::Invoice, auction),
             AuctionHouseMgr::BuildAuctionInvoiceMailBody(auction->Bidder, auction->BidAmount, auction->BuyoutOrUnitPrice, auction->Deposit,
-                CalcualteAuctionHouseCut(auction->BidAmount), sWorld->getIntConfig(CONFIG_MAIL_DELIVERY_DELAY), eta))
+                CalculateAuctionHouseCut(auction->BidAmount), sWorld->getIntConfig(CONFIG_MAIL_DELIVERY_DELAY), eta))
             .SendMailTo(trans, MailReceiver(owner, auction->Owner), this, MAIL_CHECK_MASK_COPIED);
     }
 }
